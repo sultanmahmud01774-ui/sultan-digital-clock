@@ -155,61 +155,52 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(20.dp))
         }
 
-        // --- AUDIO CONTROLS (ESP32 DFPLAYER vs ESP8266 BUZZER) ---
-        if (uiState.selectedModel == ClockModel.ESP8266) {
-            item {
-                SectionHeader(
-                    title = "HARDWARE BUZZER & CHIME",
-                    icon = Icons.Default.VolumeUp,
-                    accentColor = AmberOrange
-                )
+        // --- AUDIO CONTROLS (DFPLAYER MP3 AUDIO & HARDWARE BUZZER) ---
+        item {
+            SectionHeader(
+                title = "DFPLAYER MP3 AUDIO & SOUND",
+                icon = Icons.Default.Speaker,
+                accentColor = CyanAccent
+            )
 
-                Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-                GlassCard {
-                    Text(
-                        text = "ESP8266 Sultan Clock (Masjid Edition)",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                    Text(
-                        text = "This clock hardware uses a high-efficiency Piezo Buzzer for hourly time announcements and alarm tones.",
-                        fontSize = 12.sp,
-                        color = TextSecondary,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Button(
-                        onClick = { viewModel.testBuzzerBeep() },
+            GlassCard {
+                if (uiState.selectedModel == ClockModel.ESP8266) {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
-                            .testTag("test_buzzer_settings_btn"),
-                        colors = ButtonDefaults.buttonColors(containerColor = AmberOrange, contentColor = Color(0xFF241500)),
-                        shape = RoundedCornerShape(12.dp)
+                            .padding(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.MusicNote, contentDescription = null)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Test Buzzer (Play 3 Beeps)", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Column {
+                            Text(
+                                text = "ESP8266 AI Elite Sound System",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = AmberOrange
+                            )
+                            Text(
+                                text = "DFPlayer Mini MP3 Audio & MicroSD Support",
+                                fontSize = 11.sp,
+                                color = TextSecondary
+                            )
+                        }
+                        Button(
+                            onClick = { viewModel.testBuzzerBeep() },
+                            colors = ButtonDefaults.buttonColors(containerColor = AmberOrange.copy(alpha = 0.2f), contentColor = AmberOrange),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.VolumeUp, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Buzzer Beep", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
+                    HorizontalDivider(color = CardBorder)
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
-
-                Spacer(modifier = Modifier.height(20.dp))
-            }
-        } else {
-            item {
-                SectionHeader(
-                    title = "DFPLAYER MP3 AUDIO",
-                    icon = Icons.Default.Speaker,
-                    accentColor = CyanAccent
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                GlassCard {
                     // Volume Slider
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -299,7 +290,6 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(20.dp))
             }
-        }
 
         // --- DATE & REGIONAL SETTINGS ---
         item {

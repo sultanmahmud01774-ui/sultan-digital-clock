@@ -179,6 +179,7 @@ fun ConnectionScreen(
                                 onClick = {
                                     viewModel.setClockModel(ClockModel.ESP8266)
                                     viewModel.setHost(DevicePreferences.DEFAULT_AP_IP)
+                                    onNavigateToDashboard()
                                 },
                                 shape = RoundedCornerShape(12.dp),
                                 color = if (isEsp8266) AmberOrange.copy(alpha = 0.15f) else CardBackgroundElevated,
@@ -439,6 +440,28 @@ fun ConnectionScreen(
                         Text(
                             text = if (uiState.connectionStatus == ConnectionStatus.CONNECTING) "CONNECTING..." else "CONNECT TO CLOCK",
                             fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Open Controller / Direct Access Button
+                    OutlinedButton(
+                        onClick = { onNavigateToDashboard() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("open_dashboard_direct_btn"),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = GoldPrimary),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, GoldPrimary.copy(alpha = 0.6f))
+                    ) {
+                        Icon(Icons.Default.Dashboard, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "OPEN CONTROLLER (ড্যাশবোর্ড খুলুন)",
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }

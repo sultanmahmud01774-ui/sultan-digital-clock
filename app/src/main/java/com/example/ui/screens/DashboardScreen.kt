@@ -33,6 +33,9 @@ fun DashboardScreen(
     onNavigateToConnection: () -> Unit
 ) {
     val isConnected = uiState.connectionStatus == ConnectionStatus.CONNECTED
+    var showWebUiView by remember(uiState.selectedModel) {
+        mutableStateOf(uiState.selectedModel == ClockModel.ESP8266)
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -63,21 +66,95 @@ fun DashboardScreen(
             // Live Action Feedback Banner
             ActionFeedbackBanner(feedback = uiState.feedback)
 
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Web UI vs App Dashboard View Mode Selector
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(CardBackground, RoundedCornerShape(12.dp))
+                    .border(1.dp, CardBorder, RoundedCornerShape(12.dp))
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Surface(
+                    onClick = { showWebUiView = true },
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (showWebUiView) GoldPrimary else Color.Transparent,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Tv,
+                            contentDescription = null,
+                            tint = if (showWebUiView) Color.Black else TextSecondary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "HARDWARE WEB UI",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (showWebUiView) Color.Black else TextSecondary
+                        )
+                    }
+                }
+
+                Surface(
+                    onClick = { showWebUiView = false },
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (!showWebUiView) GoldPrimary else Color.Transparent,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Dashboard,
+                            contentDescription = null,
+                            tint = if (!showWebUiView) Color.Black else TextSecondary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "APP DASHBOARD",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (!showWebUiView) Color.Black else TextSecondary
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(12.dp))
         }
 
-        // Live Virtual LED Clock Simulator (Live Mirroring)
-        item {
-            VirtualLedClockMirror(
-                dashboardData = uiState.dashboard,
-                colorConfig = uiState.colorConfig,
-                onToggleDisplay = { viewModel.toggleDisplay() },
-                onApplyPreset = { viewModel.applyColorPreset(it) },
-                modifier = Modifier.testTag("virtual_led_clock_mirror")
-            )
+        if (showWebUiView) {
+            item {
+                EspWebUiConsole(
+                    viewModel = viewModel,
+                    uiState = uiState
+                )
+            }
+        } else {
+            // Live Virtual LED Clock Simulator (Live Mirroring)
+            item {
+                VirtualLedClockMirror(
+                    dashboardData = uiState.dashboard,
+                    colorConfig = uiState.colorConfig,
+                    onToggleDisplay = { viewModel.toggleDisplay() },
+                    onApplyPreset = { viewModel.applyColorPreset(it) },
+                    modifier = Modifier.testTag("virtual_led_clock_mirror")
+                )
 
-            Spacer(modifier = Modifier.height(14.dp))
-        }
+                Spacer(modifier = Modifier.height(14.dp))
+            }
 
         // Live Main Digital Clock Card & Controls
         item {
@@ -465,6 +542,7 @@ fun DashboardScreen(
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
+}
 
     // DFPlayer SD Card Track Manager Dialog
     if (uiState.isTrackManagerOpen) {

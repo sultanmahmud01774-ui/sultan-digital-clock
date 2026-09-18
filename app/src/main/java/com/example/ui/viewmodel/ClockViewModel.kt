@@ -28,7 +28,7 @@ data class ActionFeedback(
 )
 
 data class SultanClockUiState(
-    val selectedModel: ClockModel = ClockModel.ESP32,
+    val selectedModel: ClockModel = ClockModel.ESP8266,
     val connectionStatus: ConnectionStatus = ConnectionStatus.DISCONNECTED,
     val connectionMessage: String = "Ready to connect",
     val activeHost: String = "sultanclock.local",
@@ -678,6 +678,33 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun stopAudio() {
+        _uiState.update { it.copy(dashboard = it.dashboard.copy(currentPlayingTrack = 0)) }
+        executeAction("Stop Audio") {
+            api.testDfTrack(
+                _uiState.value.activeHost,
+                0,
+                _uiState.value.username,
+                _uiState.value.passwordInput
+            )
+        }
+    }
+
+    fun stopActiveAlarm() {
+        executeAction("Stop Alarm") {
+            api.testDfTrack(
+                _uiState.value.activeHost,
+                0,
+                _uiState.value.username,
+                _uiState.value.passwordInput
+            )
+        }
+    }
+
+    fun updateAnimSpeed(speed: Int) {
+        _uiState.update { it.copy(colorConfig = it.colorConfig.copy(animSpeed = speed)) }
+    }
+
     fun updateHourlyChime(config: HourlyChimeConfig) {
         _uiState.update { it.copy(hourlyChime = config) }
     }
@@ -725,6 +752,67 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
         executeAction("Buzzer Beep Test (বিপ পরীক্ষা)") {
             api.testTone(
                 _uiState.value.activeHost,
+                0,
+                _uiState.value.username,
+                _uiState.value.passwordInput
+            )
+        }
+    }
+
+    fun testTone(idx: Int) {
+        executeAction("Playing Tone #$idx") {
+            api.testTone(
+                _uiState.value.activeHost,
+                idx,
+                _uiState.value.username,
+                _uiState.value.passwordInput
+            )
+        }
+    }
+
+    fun saveTone(mode: Int, idx: Int) {
+        _uiState.update {
+            it.copy(
+                hourlyChime = it.hourlyChime.copy(
+                    mode = mode,
+                    fixedTrack = idx
+                )
+            )
+        }
+        executeAction("Save Tone Settings") {
+            api.saveTone(
+                _uiState.value.activeHost,
+                mode,
+                idx,
+                _uiState.value.username,
+                _uiState.value.passwordInput
+            )
+        }
+    }
+
+    fun saveSingleAlarm(
+        index: Int,
+        hour: Int,
+        minute: Int,
+        enabled: Boolean,
+        toneIndex: Int
+    ) {
+        _uiState.update {
+            val updated = if (index == 0) {
+                it.alarmConfig.copy(alarm1Hour = hour, alarm1Minute = minute, alarm1Enabled = enabled, alarm1Track = toneIndex)
+            } else {
+                it.alarmConfig.copy(alarm2Hour = hour, alarm2Minute = minute, alarm2Enabled = enabled, alarm2Track = toneIndex)
+            }
+            it.copy(alarmConfig = updated)
+        }
+        executeAction("Save Alarm ${index + 1}") {
+            api.saveSingleAlarm(
+                _uiState.value.activeHost,
+                index,
+                hour,
+                minute,
+                enabled,
+                toneIndex,
                 _uiState.value.username,
                 _uiState.value.passwordInput
             )
@@ -781,6 +869,21 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun set12HourFormat(is12Hour: Boolean) {
+        _uiState.update { it.copy(dashboard = it.dashboard.copy(is12Hour = is12Hour)) }
+        executeAction(if (is12Hour) "Set 12-Hour Format" else "Set 24-Hour Format") {
+            api.saveDisplaySettings(
+                host = _uiState.value.activeHost,
+                is12Hour = is12Hour,
+                showDate = _uiState.value.dateSettings.isDateEnabled,
+                colonBlink = _uiState.value.dashboard.isLightOn,
+                hourlyBeep = _uiState.value.dashboard.hourlyBeepEnabled,
+                user = _uiState.value.username,
+                pass = _uiState.value.passwordInput
+            )
+        }
+    }
+
     fun saveHourlyBeep(enabled: Boolean) {
         _uiState.update {
             it.copy(
@@ -799,6 +902,53 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
                 pass = _uiState.value.passwordInput
             )
         }
+    }
+
+    fun updateBrightnessConfig(config: BrightnessConfig) {
+        _uiState.update { it.copy(brightnessConfig = config) }
+    }
+
+    fun updateColorConfig(config: ColorConfig) {
+        _uiState.update { it.copy(colorConfig = config) }
+    }
+
+    fun updateDisplaySettings(
+        is12Hour: Boolean = _uiState.value.dashboard.is12Hour,
+        showDate: Boolean = _uiState.value.dateSettings.isDateEnabled,
+        colonBlink: Boolean = _uiState.value.dashboard.isLightOn,
+        hourlyBeep: Boolean = _uiState.value.dashboard.hourlyBeepEnabled
+    ) {
+        _uiState.update {
+            it.copy(
+                dashboard = it.dashboard.copy(
+                    is12Hour = is12Hour,
+                    isLightOn = colonBlink,
+                    enableEnglishDate = showDate,
+                    hourlyBeepEnabled = hourlyBeep
+                ),
+                dateSettings = it.dateSettings.copy(
+                    isDateEnabled = showDate
+                )
+            )
+        }
+    }
+
+    fun saveDisplaySettings() {
+        executeAction("Save Display Settings") {
+            api.saveDisplaySettings(
+                host = _uiState.value.activeHost,
+                is12Hour = _uiState.value.dashboard.is12Hour,
+                showDate = _uiState.value.dateSettings.isDateEnabled,
+                colonBlink = _uiState.value.dashboard.isLightOn,
+                hourlyBeep = _uiState.value.dashboard.hourlyBeepEnabled,
+                user = _uiState.value.username,
+                pass = _uiState.value.passwordInput
+            )
+        }
+    }
+
+    fun stopAlarmAudio() {
+        stopActiveAlarm()
     }
 
     // --- TRACK ASSIGNMENTS ---

@@ -49,7 +49,64 @@ fun ScheduleScreen(
             ActionFeedbackBanner(feedback = uiState.feedback)
             Spacer(modifier = Modifier.height(8.dp))
 
+            // SD Card Track Catalog Quick Action Card
+            Surface(
+                onClick = { viewModel.openTrackManager(true) },
+                shape = RoundedCornerShape(16.dp),
+                color = CardBackground,
+                border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryGreen.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(PrimaryGreen.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LibraryMusic,
+                                contentDescription = null,
+                                tint = EmeraldGreen,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = "DFPlayer SD Card Track Manager",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = "কাস্টম ট্র্যাক নাম ও অডিও ক্যাটালগ এডিট করুন",
+                                fontSize = 11.sp,
+                                color = TextSecondary
+                            )
+                        }
+                    }
+
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = EmeraldGreen
+                    )
+                }
+            }
+
             if (uiState.selectedModel == ClockModel.ESP8266) {
+                Spacer(modifier = Modifier.height(8.dp))
                 // ESP8266 Buzzer Test Quick Card
                 Surface(
                     onClick = { viewModel.testBuzzerBeep() },
@@ -102,62 +159,6 @@ fun ScheduleScreen(
                             imageVector = Icons.Default.PlayArrow,
                             contentDescription = null,
                             tint = AmberOrange
-                        )
-                    }
-                }
-            } else {
-                // SD Card Track Catalog Quick Action Card
-                Surface(
-                    onClick = { viewModel.openTrackManager(true) },
-                    shape = RoundedCornerShape(16.dp),
-                    color = CardBackground,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryGreen.copy(alpha = 0.5f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(androidx.compose.foundation.shape.CircleShape)
-                                    .background(PrimaryGreen.copy(alpha = 0.2f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.LibraryMusic,
-                                    contentDescription = null,
-                                    tint = EmeraldGreen,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                            Column {
-                                Text(
-                                    text = "DFPlayer SD Card Track Manager",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimary
-                                )
-                                Text(
-                                    text = "কাস্টম ট্র্যাক নাম ও অডিও ক্যাটালগ এডিট করুন",
-                                    fontSize = 11.sp,
-                                    color = TextSecondary
-                                )
-                            }
-                        }
-
-                        Icon(
-                            imageVector = Icons.Default.ChevronRight,
-                            contentDescription = null,
-                            tint = EmeraldGreen
                         )
                     }
                 }

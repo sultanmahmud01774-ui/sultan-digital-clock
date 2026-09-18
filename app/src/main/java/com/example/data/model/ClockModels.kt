@@ -24,10 +24,10 @@ enum class ClockModel(
     ),
     ESP8266(
         id = "esp8266",
-        title = "ESP8266 Masjid Clock",
-        shortName = "ESP8266",
-        description = "Masjid Edition, 44-LEDs, Hourly Beep & D7 Light",
-        defaultApSsid = "SULTAN CLOCK MASJID"
+        title = "ESP8266 Smart Clock (AI Elite Edition)",
+        shortName = "ESP8266 AI Elite",
+        description = "AI Elite Matrix: DFPlayer, Azan, Weekly Playlist & NeoPixel",
+        defaultApSsid = "SULTAN CLOCK -ESP8266"
     );
 
     val displayName: String get() = title

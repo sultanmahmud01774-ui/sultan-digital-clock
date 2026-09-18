@@ -24,7 +24,7 @@ class DevicePreferences(context: Context) {
         const val DEFAULT_ADMIN_USER = "admin"
         const val DEFAULT_ADMIN_PASS = "sultan88"
         const val DEFAULT_ESP32_AP_SSID = "Sultan_Clock_AP"
-        const val DEFAULT_ESP8266_AP_SSID = "SULTAN CLOCK MASJID"
+        const val DEFAULT_ESP8266_AP_SSID = "SULTAN CLOCK -ESP8266"
 
         const val KEY_TRACK_NAMES = "key_track_names_json"
         const val KEY_BACKUP_PROFILES = "key_backup_profiles_json"
@@ -79,11 +79,11 @@ class DevicePreferences(context: Context) {
 
     var clockModel: ClockModel
         get() {
-            val saved = prefs.getString(KEY_CLOCK_MODEL, ClockModel.ESP32.name)
+            val saved = prefs.getString(KEY_CLOCK_MODEL, ClockModel.ESP8266.name)
             return try {
-                ClockModel.valueOf(saved ?: ClockModel.ESP32.name)
+                ClockModel.valueOf(saved ?: ClockModel.ESP8266.name)
             } catch (e: Exception) {
-                ClockModel.ESP32
+                ClockModel.ESP8266
             }
         }
         set(value) = prefs.edit().putString(KEY_CLOCK_MODEL, value.name).apply()

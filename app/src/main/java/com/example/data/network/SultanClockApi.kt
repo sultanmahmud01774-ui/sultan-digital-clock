@@ -382,7 +382,7 @@ open class Esp32Api {
             val asrTime = extractRegex("Asr<br>([0-9:]+)", "16:35")
             val maghribTime = extractRegex("Maghrib<br>([0-9:]+)", "18:32")
             val ishaTime = extractRegex("Isha<br>([0-9:]+)", "19:48")
-            val prayerTimes = if (isEsp8266) null else PrayerTimes(
+            val prayerTimes = PrayerTimes(
                 fajr = fajrTime,
                 sunrise = sunriseTime,
                 dhuhr = dhuhrTime,
@@ -392,8 +392,10 @@ open class Esp32Api {
                 isAzanAlarmEnabled = isPrayerAlarmOn
             )
 
-            // 4. DFPlayer & Audio (ESP32) & Buzzer Hourly Beep (ESP8266 & ESP32)
-            val dfConnected = html.contains("DFPlayer Mini ready", ignoreCase = true)
+            // 4. DFPlayer & Audio (ESP32 & ESP8266) & Buzzer Hourly Beep
+            val dfConnected = html.contains("DFPlayer Mini ready", ignoreCase = true) ||
+                    html.contains("DFPLAYER", ignoreCase = true) ||
+                    html.contains("dfvol", ignoreCase = true)
             val dfVol = extractRegex("id=['\"]dfvol['\"][^>]*value=['\"]([0-9]+)['\"]", "22").toIntOrNull() ?: 22
             val hourlyChimeEnabled = hasChecked("hourlybeep_range") || hasChecked("hourlybeep2") || hasChecked("hourlybeep")
             val hourlyToneRangeEnabled = hasChecked("tonerangeen")
@@ -612,7 +614,7 @@ open class Esp32Api {
         return sendGet(host, "/savedatesettings", params, user, pass)
     }
 
-    // 5. Alarm Settings (TWO separate calls, one per alarm, with i,h,m,e)
+    // 5. Alarm Settings (TWO separate calls, one per alarm, with i,h,m,e,t)
     suspend fun saveAlarm(
         host: String,
         config: AlarmConfig,
@@ -624,7 +626,8 @@ open class Esp32Api {
                 "i" to "0",
                 "h" to config.alarm1Hour.toString(),
                 "m" to config.alarm1Minute.toString(),
-                "e" to if (config.alarm1Enabled) "1" else "0"
+                "e" to if (config.alarm1Enabled) "1" else "0",
+                "t" to config.alarm1Track.toString()
             ), user, pass
         )
         if (!r1.isSuccess) return r1
@@ -633,7 +636,29 @@ open class Esp32Api {
                 "i" to "1",
                 "h" to config.alarm2Hour.toString(),
                 "m" to config.alarm2Minute.toString(),
-                "e" to if (config.alarm2Enabled) "1" else "0"
+                "e" to if (config.alarm2Enabled) "1" else "0",
+                "t" to config.alarm2Track.toString()
+            ), user, pass
+        )
+    }
+
+    suspend fun saveSingleAlarm(
+        host: String,
+        index: Int,
+        hour: Int,
+        minute: Int,
+        enabled: Boolean,
+        toneIndex: Int,
+        user: String,
+        pass: String
+    ): ActionResponse {
+        return sendGet(
+            host, "/savealarm", mapOf(
+                "i" to index.toString(),
+                "h" to hour.toString(),
+                "m" to minute.toString(),
+                "e" to if (enabled) "1" else "0",
+                "t" to toneIndex.toString()
             ), user, pass
         )
     }
@@ -939,8 +964,17 @@ open class Esp32Api {
     }
 
     // 15b. ESP8266 Specific Utilities (Buzzer Test, Default Password Reset, Date Display)
-    suspend fun testTone(host: String, user: String, pass: String): ActionResponse {
-        return sendGet(host, "/testtone", emptyMap(), user, pass)
+    suspend fun testTone(host: String, idx: Int = 0, user: String, pass: String): ActionResponse {
+        val params = mapOf("idx" to idx.toString())
+        return sendGet(host, "/testtone", params, user, pass)
+    }
+
+    suspend fun saveTone(host: String, mode: Int, idx: Int, user: String, pass: String): ActionResponse {
+        val params = mapOf(
+            "mode" to mode.toString(),
+            "idx" to idx.toString()
+        )
+        return sendGet(host, "/savetone", params, user, pass)
     }
 
     suspend fun resetDefaultPassword(host: String, user: String, pass: String): ActionResponse {
