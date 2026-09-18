@@ -29,7 +29,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.ClockModel
 import com.example.data.model.ConnectionStatus
+import com.example.data.storage.DevicePreferences
 import com.example.ui.components.GlassCard
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.ClockViewModel
@@ -96,7 +98,7 @@ fun ConnectionScreen(
                 )
 
                 Text(
-                    text = "ESP32 Smart Clock Controller",
+                    text = "ESP32 & ESP8266 Dual Smart Clock Controller",
                     fontSize = 13.sp,
                     color = CyanAccent,
                     fontWeight = FontWeight.Medium,
@@ -104,7 +106,122 @@ fun ConnectionScreen(
                     modifier = Modifier.padding(top = 4.dp)
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(18.dp))
+
+                // Hardware Module Selector Card
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = CardBackground,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "SELECT CLOCK HARDWARE / মডিউল নির্বাচন:",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextSecondary,
+                            letterSpacing = 0.5.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // ESP32 Chip Option
+                            val isEsp32 = uiState.selectedModel == ClockModel.ESP32
+                            Surface(
+                                onClick = {
+                                    viewModel.setClockModel(ClockModel.ESP32)
+                                    viewModel.setHost(DevicePreferences.DEFAULT_MDNS_HOST)
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isEsp32) CyanAccent.copy(alpha = 0.15f) else CardBackgroundElevated,
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isEsp32) CyanAccent else CardBorder
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("select_esp32_tab")
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Memory,
+                                        contentDescription = null,
+                                        tint = if (isEsp32) CyanAccent else TextMuted,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Column {
+                                        Text(
+                                            text = "ESP32 Edition",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isEsp32) CyanAccent else TextPrimary
+                                        )
+                                        Text(
+                                            text = "Audio & DFPlayer",
+                                            fontSize = 9.sp,
+                                            color = TextSecondary
+                                        )
+                                    }
+                                }
+                            }
+
+                            // ESP8266 Chip Option
+                            val isEsp8266 = uiState.selectedModel == ClockModel.ESP8266
+                            Surface(
+                                onClick = {
+                                    viewModel.setClockModel(ClockModel.ESP8266)
+                                    viewModel.setHost(DevicePreferences.DEFAULT_AP_IP)
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isEsp8266) AmberOrange.copy(alpha = 0.15f) else CardBackgroundElevated,
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isEsp8266) AmberOrange else CardBorder
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("select_esp8266_tab")
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Mosque,
+                                        contentDescription = null,
+                                        tint = if (isEsp8266) AmberOrange else TextMuted,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Column {
+                                        Text(
+                                            text = "ESP8266 Edition",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isEsp8266) AmberOrange else TextPrimary
+                                        )
+                                        Text(
+                                            text = "Masjid & Buzzer",
+                                            fontSize = 9.sp,
+                                            color = TextSecondary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
             }
 
             // Connection Status Banner
@@ -371,7 +488,12 @@ fun ConnectionScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Method B: ESP32 Access Point
+                    // Method B: Clock Hotspot Access Point
+                    val apName = if (uiState.selectedModel == ClockModel.ESP8266) {
+                        DevicePreferences.DEFAULT_ESP8266_AP_SSID
+                    } else {
+                        DevicePreferences.DEFAULT_ESP32_AP_SSID
+                    }
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -388,13 +510,54 @@ fun ConnectionScreen(
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.WifiTethering, contentDescription = null, tint = CyanAccent)
+                            Icon(
+                                imageVector = Icons.Default.WifiTethering,
+                                contentDescription = null,
+                                tint = if (uiState.selectedModel == ClockModel.ESP8266) AmberOrange else CyanAccent
+                            )
                             Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Method B — Clock Hotspot AP", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                                Text("http://192.168.4.1 (Connect phone to clock Wi-Fi)", fontSize = 12.sp, color = TextSecondary)
+                                Text(
+                                    text = "Method B — Hotspot AP ($apName)",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    text = "http://192.168.4.1 (Connect phone to clock Wi-Fi)",
+                                    fontSize = 12.sp,
+                                    color = TextSecondary
+                                )
                             }
                             Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
+                        }
+                    }
+
+                    if (uiState.selectedModel == ClockModel.ESP8266) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    viewModel.resetDefaultAdminPassword()
+                                },
+                            color = CardBackgroundElevated
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.LockReset, contentDescription = null, tint = WarningOrange)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Forgot Password? Reset to sultan88", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = WarningOrange)
+                                    Text("Resets clock password back to factory sultan88", fontSize = 11.sp, color = TextSecondary)
+                                }
+                                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
+                            }
                         }
                     }
                 }

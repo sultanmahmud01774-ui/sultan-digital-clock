@@ -28,6 +28,7 @@ data class ActionFeedback(
 )
 
 data class SultanClockUiState(
+    val selectedModel: ClockModel = ClockModel.ESP32,
     val connectionStatus: ConnectionStatus = ConnectionStatus.DISCONNECTED,
     val connectionMessage: String = "Ready to connect",
     val activeHost: String = "sultanclock.local",
@@ -38,6 +39,7 @@ data class SultanClockUiState(
     val isManualIpDialogOpen: Boolean = false,
     val manualIpInput: String = "",
     val savedIps: Set<String> = emptySet(),
+    val wifiPasswordDisplay: String? = null,
     
     // Live Dashboard Telemetry
     val dashboard: ClockDashboardData = ClockDashboardData(),
@@ -90,6 +92,7 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(
         SultanClockUiState(
+            selectedModel = prefs.clockModel,
             activeHost = prefs.ipAddress,
             username = prefs.username,
             passwordInput = prefs.password,
@@ -112,6 +115,13 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
         if (_uiState.value.autoConnect) {
             connectToClock()
         }
+    }
+
+    // --- CLOCK MODEL SELECTION (ESP32 vs ESP8266) ---
+
+    fun setClockModel(model: ClockModel) {
+        prefs.clockModel = model
+        _uiState.update { it.copy(selectedModel = model) }
     }
 
     // --- CONNECTION MANAGEMENT ---
@@ -292,11 +302,20 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
         stopPolling()
         pollingJob = viewModelScope.launch {
             _uiState.update { it.copy(isPolling = true) }
+            var consecutiveErrors = 0
             while (isActive) {
                 try {
                     val user = _uiState.value.username
                     val pass = _uiState.value.passwordInput
                     val data = api.getStatus(host, user, pass)
+                    consecutiveErrors = 0
+
+                    // Performance optimization: If clock data has not changed, do not trigger recomposition
+                    if (data == _uiState.value.dashboard) {
+                        delay(4000)
+                        continue
+                    }
+
                     _uiState.update { current ->
                         val updatedAlarmConfig = current.alarmConfig.copy(
                             alarm1Hour = data.alarms.getOrNull(0)?.hour ?: current.alarmConfig.alarm1Hour,
@@ -366,15 +385,23 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
                                 manualBrightness = data.appliedBrightness
                             ),
                             hourlyChime = current.hourlyChime.copy(
-                                enabled = data.hourlyChimeEnabled,
-                                mode = data.hourlyChimeMode
-                            )
+                                enabled = data.hourlyBeepEnabled,
+                                mode = data.hourlyChimeMode,
+                                startHour = data.hourlyToneStartHour,
+                                endHour = data.hourlyToneEndHour
+                            ),
+                            selectedModel = if (data.firmwareVersion.contains("ESP8266")) ClockModel.ESP8266 else current.selectedModel
                         )
                     }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     Log.w("ClockViewModel", "Live status polling error: ${e.message}")
+                    consecutiveErrors++
+                    if (consecutiveErrors >= 2) {
+                        delay(7000) // Back off on connection errors
+                        continue
+                    }
                 }
                 delay(3500) // Poll every 3.5 seconds while Home/Controls screen is visible
             }
@@ -408,15 +435,30 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
                 ActionResponse(false, e.localizedMessage ?: "Action failed")
             }
 
-            _uiState.update {
-                it.copy(
+            _uiState.update { current ->
+                val isConnectionFailure = !result.isSuccess && (
+                    result.message.contains("timed out", ignoreCase = true) ||
+                    result.message.contains("unreachable", ignoreCase = true) ||
+                    result.message.contains("offline", ignoreCase = true)
+                )
+                current.copy(
                     feedback = ActionFeedback(
                         inProgress = false,
                         actionName = name,
                         isSuccess = result.isSuccess,
                         message = if (result.isSuccess) "$name applied successfully" else result.message,
                         timestamp = System.currentTimeMillis()
-                    )
+                    ),
+                    connectionStatus = if (isConnectionFailure && current.connectionStatus == ConnectionStatus.CONNECTED) {
+                        ConnectionStatus.DISCONNECTED
+                    } else {
+                        current.connectionStatus
+                    },
+                    connectionMessage = if (isConnectionFailure && current.connectionStatus == ConnectionStatus.CONNECTED) {
+                        "Clock unreachable at ${current.activeHost}. Please connect to ${current.selectedModel.defaultApSsid}."
+                    } else {
+                        current.connectionMessage
+                    }
                 )
             }
         }
@@ -651,16 +693,110 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun saveToneRange() {
-        val conf = _uiState.value.hourlyChime
+    fun saveToneRange(
+        enabled: Boolean = _uiState.value.hourlyChime.toneRangeEnabled,
+        startHour: Int = _uiState.value.hourlyChime.toneStartHour,
+        endHour: Int = _uiState.value.hourlyChime.toneEndHour
+    ) {
+        _uiState.update {
+            it.copy(
+                hourlyChime = it.hourlyChime.copy(
+                    toneRangeEnabled = enabled,
+                    toneStartHour = startHour,
+                    toneEndHour = endHour
+                )
+            )
+        }
         executeAction("Save Chime Active Hours") {
             api.saveToneRange(
                 _uiState.value.activeHost,
-                conf.enabled,
-                conf.startHour,
-                conf.endHour,
+                enabled,
+                startHour,
+                endHour,
                 _uiState.value.username,
                 _uiState.value.passwordInput
+            )
+        }
+    }
+
+    // --- ESP8266 SPECIFIC CONTROLS & UTILITIES ---
+
+    fun testBuzzerBeep() {
+        executeAction("Buzzer Beep Test (বিপ পরীক্ষা)") {
+            api.testTone(
+                _uiState.value.activeHost,
+                _uiState.value.username,
+                _uiState.value.passwordInput
+            )
+        }
+    }
+
+    fun resetDefaultAdminPassword() {
+        executeAction("Reset Default Password") {
+            val res = api.resetDefaultPassword(
+                _uiState.value.activeHost,
+                _uiState.value.username,
+                _uiState.value.passwordInput
+            )
+            if (res.isSuccess) {
+                _uiState.update { it.copy(passwordInput = "sultan88") }
+                prefs.password = "sultan88"
+            }
+            res
+        }
+    }
+
+    fun fetchWifiPassword() {
+        viewModelScope.launch {
+            val res = api.showWifiPassword(
+                _uiState.value.activeHost,
+                _uiState.value.username,
+                _uiState.value.passwordInput
+            )
+            _uiState.update {
+                it.copy(
+                    wifiPasswordDisplay = if (res.isSuccess) res.rawResponse ?: res.message else "Error fetching password"
+                )
+            }
+        }
+    }
+
+    fun saveDateDisplaySettings(englishDate: Boolean, banglaDate: Boolean) {
+        _uiState.update {
+            it.copy(
+                dateSettings = it.dateSettings.copy(
+                    isDateEnabled = englishDate,
+                    isBanglaDate = banglaDate
+                )
+            )
+        }
+        executeAction("Save Date Settings (তারিখ প্রদর্শন)") {
+            api.saveDateDisplaySettings(
+                _uiState.value.activeHost,
+                englishDate,
+                banglaDate,
+                _uiState.value.username,
+                _uiState.value.passwordInput
+            )
+        }
+    }
+
+    fun saveHourlyBeep(enabled: Boolean) {
+        _uiState.update {
+            it.copy(
+                hourlyChime = it.hourlyChime.copy(enabled = enabled),
+                dashboard = it.dashboard.copy(hourlyBeepEnabled = enabled)
+            )
+        }
+        executeAction(if (enabled) "Enable Hourly Beep" else "Mute Hourly Beep") {
+            api.saveDisplaySettings(
+                host = _uiState.value.activeHost,
+                is12Hour = _uiState.value.dashboard.is12Hour,
+                showDate = _uiState.value.dateSettings.isDateEnabled,
+                colonBlink = _uiState.value.dashboard.isLightOn,
+                hourlyBeep = enabled,
+                user = _uiState.value.username,
+                pass = _uiState.value.passwordInput
             )
         }
     }

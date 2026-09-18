@@ -2,6 +2,7 @@ package com.example.data.storage
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.example.data.model.ClockModel
 
 class DevicePreferences(context: Context) {
     private val prefs: SharedPreferences =
@@ -16,11 +17,14 @@ class DevicePreferences(context: Context) {
         private const val KEY_AUTO_CONNECT = "key_auto_connect"
         private const val KEY_SAVED_IPS = "key_saved_ips"
         private const val KEY_LAST_CONN_TYPE = "key_last_conn_type"
+        private const val KEY_CLOCK_MODEL = "key_clock_model"
 
         const val DEFAULT_MDNS_HOST = "sultanclock.local"
         const val DEFAULT_AP_IP = "192.168.4.1"
         const val DEFAULT_ADMIN_USER = "admin"
         const val DEFAULT_ADMIN_PASS = "sultan88"
+        const val DEFAULT_ESP32_AP_SSID = "Sultan_Clock_AP"
+        const val DEFAULT_ESP8266_AP_SSID = "SULTAN CLOCK MASJID"
 
         const val KEY_TRACK_NAMES = "key_track_names_json"
         const val KEY_BACKUP_PROFILES = "key_backup_profiles_json"
@@ -72,6 +76,17 @@ class DevicePreferences(context: Context) {
     var lastConnectionType: String
         get() = prefs.getString(KEY_LAST_CONN_TYPE, "mDNS") ?: "mDNS"
         set(value) = prefs.edit().putString(KEY_LAST_CONN_TYPE, value).apply()
+
+    var clockModel: ClockModel
+        get() {
+            val saved = prefs.getString(KEY_CLOCK_MODEL, ClockModel.ESP32.name)
+            return try {
+                ClockModel.valueOf(saved ?: ClockModel.ESP32.name)
+            } catch (e: Exception) {
+                ClockModel.ESP32
+            }
+        }
+        set(value) = prefs.edit().putString(KEY_CLOCK_MODEL, value.name).apply()
 
     fun getSavedIps(): Set<String> {
         val defaultSet = setOf(DEFAULT_MDNS_HOST, DEFAULT_AP_IP, "192.168.1.120")

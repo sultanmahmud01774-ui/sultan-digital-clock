@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.ClockModel
 import com.example.data.model.ConnectionStatus
 import com.example.ui.components.*
 import com.example.ui.theme.*
@@ -90,51 +91,97 @@ fun DashboardScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Smart Tools Row (Track Manager & Backup Restore)
+            // Smart Tools Row (Track Manager / Buzzer Test & Backup Restore)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Surface(
-                    onClick = { viewModel.openTrackManager(true) },
-                    shape = RoundedCornerShape(14.dp),
-                    color = CardBackground,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryGreen.copy(alpha = 0.5f)),
-                    modifier = Modifier.weight(1f).height(62.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                if (uiState.selectedModel == ClockModel.ESP8266) {
+                    Surface(
+                        onClick = { viewModel.testBuzzerBeep() },
+                        shape = RoundedCornerShape(14.dp),
+                        color = CardBackground,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, AmberOrange.copy(alpha = 0.5f)),
+                        modifier = Modifier.weight(1f).height(62.dp)
                     ) {
-                        Box(
+                        Row(
                             modifier = Modifier
-                                .size(36.dp)
-                                .clip(androidx.compose.foundation.shape.CircleShape)
-                                .background(PrimaryGreen.copy(alpha = 0.2f)),
-                            contentAlignment = Alignment.Center
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.LibraryMusic,
-                                contentDescription = null,
-                                tint = EmeraldGreen,
-                                modifier = Modifier.size(20.dp)
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .background(AmberOrange.copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.VolumeUp,
+                                    contentDescription = null,
+                                    tint = AmberOrange,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = "Buzzer Beep",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    text = "৩ বার বিপ পরীক্ষা",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = AmberOrange
+                                )
+                            }
                         }
-                        Column {
-                            Text(
-                                text = "Track Manager",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                            Text(
-                                text = "SD কার্ড অডিও নাম",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = EmeraldGreen
-                            )
+                    }
+                } else {
+                    Surface(
+                        onClick = { viewModel.openTrackManager(true) },
+                        shape = RoundedCornerShape(14.dp),
+                        color = CardBackground,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryGreen.copy(alpha = 0.5f)),
+                        modifier = Modifier.weight(1f).height(62.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .background(PrimaryGreen.copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LibraryMusic,
+                                    contentDescription = null,
+                                    tint = EmeraldGreen,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = "Track Manager",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    text = "SD কার্ড অডিও নাম",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = EmeraldGreen
+                                )
+                            }
                         }
                     }
                 }
@@ -229,15 +276,27 @@ fun DashboardScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                QuickActionButton(
-                    title = "Prayer / Azan",
-                    subtitle = if (uiState.dashboard.isPrayerAlarmOn) "Alarm: ACTIVE" else "Alarm: MUTED",
-                    icon = Icons.Default.Mosque,
-                    isActive = uiState.dashboard.isPrayerAlarmOn,
-                    onClick = { viewModel.togglePrayerAlarm() },
-                    activeColor = SuccessGreen,
-                    modifier = Modifier.weight(1f).testTag("toggle_prayer_btn")
-                )
+                if (uiState.selectedModel == ClockModel.ESP8266) {
+                    QuickActionButton(
+                        title = "Hourly Beep",
+                        subtitle = if (uiState.dashboard.hourlyBeepEnabled) "Status: ON" else "Status: OFF",
+                        icon = Icons.Default.NotificationsActive,
+                        isActive = uiState.dashboard.hourlyBeepEnabled,
+                        onClick = { viewModel.saveHourlyBeep(!uiState.dashboard.hourlyBeepEnabled) },
+                        activeColor = AmberOrange,
+                        modifier = Modifier.weight(1f).testTag("toggle_hourly_beep_btn")
+                    )
+                } else {
+                    QuickActionButton(
+                        title = "Prayer / Azan",
+                        subtitle = if (uiState.dashboard.isPrayerAlarmOn) "Alarm: ACTIVE" else "Alarm: MUTED",
+                        icon = Icons.Default.Mosque,
+                        isActive = uiState.dashboard.isPrayerAlarmOn,
+                        onClick = { viewModel.togglePrayerAlarm() },
+                        activeColor = SuccessGreen,
+                        modifier = Modifier.weight(1f).testTag("toggle_prayer_btn")
+                    )
+                }
 
                 QuickActionButton(
                     title = "Temp Sensor",

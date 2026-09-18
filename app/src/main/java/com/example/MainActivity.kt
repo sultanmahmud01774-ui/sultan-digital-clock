@@ -8,6 +8,7 @@ import androidx.activity.viewModels
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.example.data.model.ClockModel
 import com.example.data.model.ConnectionStatus
 import com.example.ui.screens.*
 import com.example.ui.theme.*
@@ -138,6 +140,42 @@ fun SultanClockMainApp(viewModel: ClockViewModel) {
                         }
                     },
                     actions = {
+                        // Module Badge / Switcher
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (uiState.selectedModel == ClockModel.ESP8266) AmberOrange.copy(alpha = 0.2f) else CyanAccent.copy(alpha = 0.2f),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (uiState.selectedModel == ClockModel.ESP8266) AmberOrange else CyanAccent
+                            ),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable {
+                                    val nextModel = if (uiState.selectedModel == ClockModel.ESP32) ClockModel.ESP8266 else ClockModel.ESP32
+                                    viewModel.setClockModel(nextModel)
+                                }
+                                .testTag("topbar_model_switcher")
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (uiState.selectedModel == ClockModel.ESP8266) Icons.Default.Mosque else Icons.Default.Memory,
+                                    contentDescription = null,
+                                    tint = if (uiState.selectedModel == ClockModel.ESP8266) AmberOrange else CyanAccent,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = uiState.selectedModel.shortName,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (uiState.selectedModel == ClockModel.ESP8266) AmberOrange else CyanAccent
+                                )
+                            }
+                        }
+
                         IconButton(
                             onClick = { showConnectionModal = true },
                             modifier = Modifier.testTag("open_connection_settings")
