@@ -1,0 +1,64 @@
+name: Build Debug APK
+
+# Runs automatically on every push to main, and can also be triggered manually
+# from the Actions tab ("Run workflow" button).
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      # NOTE: this project's exported zip does NOT include the gradlew /
+      # gradlew.bat wrapper scripts (or gradle-wrapper.jar) that AI Studio
+      # normally leaves out of its export. Rather than relying on a wrapper
+      # that isn't in the repo, we install Gradle directly at the exact
+      # version pinned in gradle/wrapper/gradle-wrapper.properties (9.3.1)
+      # via the official Gradle GitHub Action, and invoke `gradle` directly.
+      - name: Set up Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 9.3.1
+
+      # The project's debug build type points to "${rootDir}/debug.keystore"
+      # (app/build.gradle.kts -> signingConfigs.debugConfig), but that file
+      # is NOT committed to the repo. Without it, `assembleDebug` fails with
+      # a "keystore not found" error. This step generates the *standard*
+      # Android debug keystore (same alias/passwords Android Studio itself
+      # uses by default) so the build works the same as it does locally.
+      - name: Generate debug keystore
+        run: |
+          keytool -genkey -v \
+            -keystore debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US" \
+            -keyalg RSA -keysize 2048 -validity 10000
+
+      - name: Prepare environment configuration
+        run: |
+          if [ ! -f .env ]; then
+            echo 'GEMINI_API_KEY="dummy_gemini_api_key"' > .env
+          fi
+
+      - name: Build debug APK
+        run: gradle assembleDebug --stacktrace
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sultan-digital-clock-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

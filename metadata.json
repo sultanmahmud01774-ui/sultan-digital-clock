@@ -1,0 +1,6 @@
+{
+  "name": "Sultan Digital Clock",
+  "description": "Native Android controller for ESP32 Sultan Digital Clock with live telemetry, color, alarms, DFPlayer, and settings management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

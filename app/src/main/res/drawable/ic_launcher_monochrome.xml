@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.65"
+        android:scaleY="0.65"
+        android:translateX="18.9"
+        android:translateY="18.9">
+        <!-- Rounded Clock Body -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M24,34 h60 c6.63,0 12,5.37 12,12 v24 c0,6.63 -5.37,12 -12,12 h-60 c-6.63,0 -12,-5.37 -12,-12 v-24 c0,-6.63 5.37,-12 12,-12 Z" />
+        <!-- Digital Display Cutout -->
+        <path
+            android:fillColor="#000000"
+            android:pathData="M26,38 h56 c4.42,0 8,3.58 8,8 v18 c0,4.42 -3.58,8 -8,8 h-56 c-4.42,0 -8,-3.58 -8,-8 v-18 c0,-4.42 3.58,-8 8,-8 Z" />
+        <!-- Digital clock time indicators -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M35,46 h4 v14 h-4 Z M45,46 h4 v14 h-4 Z M53,50 h2 v2 h-2 Z M53,56 h2 v2 h-2 Z M59,46 h4 v14 h-4 Z M69,46 h4 v14 h-4 Z" />
+        <!-- Top ambient LED bar -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M34,28 h40 c2.2,0 4,1.8 4,4 v0 c0,1.1 -0.9,2 -2,2 h-44 c-1.1,0 -2,-0.9 -2,-2 v0 c0,-2.2 1.8,-4 4,-4 Z" />
+    </group>
+</vector>
