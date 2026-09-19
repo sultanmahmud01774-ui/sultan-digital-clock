@@ -61,7 +61,7 @@ class MainActivity : ComponentActivity() {
 fun SultanClockMainApp(viewModel: ClockViewModel) {
     val uiState by viewModel.uiState.collectAsState()
     var currentScreen by remember { mutableStateOf(MainNavScreen.HOME) }
-    var showConnectionModal by remember { mutableStateOf(false) }
+    var userBypassedConnection by remember { mutableStateOf(false) }
     var isForeground by remember { mutableStateOf(true) }
 
     // Lifecycle observer to stop polling when the app is paused / backgrounded
@@ -94,13 +94,15 @@ fun SultanClockMainApp(viewModel: ClockViewModel) {
         viewModel.updateVisibility(isHomeOrControls = isHomeOrControls, isForeground = isForeground)
     }
 
-    // If disconnected and not dismissed, show connection screen
-    if (uiState.connectionStatus != ConnectionStatus.CONNECTED && (showConnectionModal || uiState.connectionStatus == ConnectionStatus.DISCONNECTED || uiState.connectionStatus == ConnectionStatus.AUTH_REQUIRED)) {
+    // Show connection screen when not connected, unless user deliberately skipped to offline mode
+    val shouldShowConnectionScreen = uiState.connectionStatus != ConnectionStatus.CONNECTED && !userBypassedConnection
+
+    if (shouldShowConnectionScreen) {
         ConnectionScreen(
             viewModel = viewModel,
             uiState = uiState,
             onNavigateToDashboard = {
-                showConnectionModal = false
+                userBypassedConnection = true
             }
         )
     } else {
@@ -177,7 +179,7 @@ fun SultanClockMainApp(viewModel: ClockViewModel) {
                         }
 
                         IconButton(
-                            onClick = { showConnectionModal = true },
+                            onClick = { userBypassedConnection = false },
                             modifier = Modifier.testTag("open_connection_settings")
                         ) {
                             Icon(
@@ -245,7 +247,7 @@ fun SultanClockMainApp(viewModel: ClockViewModel) {
                         MainNavScreen.HOME -> DashboardScreen(
                             viewModel = viewModel,
                             uiState = uiState,
-                            onNavigateToConnection = { showConnectionModal = true }
+                            onNavigateToConnection = { userBypassedConnection = false }
                         )
                         MainNavScreen.CONTROLS -> ControlsScreen(
                             viewModel = viewModel,

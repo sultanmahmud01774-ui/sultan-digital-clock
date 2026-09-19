@@ -2031,10 +2031,25 @@ fun EspWebUiConsole(
                     Button(
                         onClick = {
                             val presetSteps = when (pIdx) {
-                                0 -> listOf(ColorPlaylistStep(0, 0, 20), ColorPlaylistStep(1, 2, 20), ColorPlaylistStep(0, 3, 20))
-                                1 -> listOf(ColorPlaylistStep(1, 4, 25), ColorPlaylistStep(0, 9, 25), ColorPlaylistStep(1, 10, 25))
-                                2 -> listOf(ColorPlaylistStep(0, 2, 20), ColorPlaylistStep(1, 3, 20), ColorPlaylistStep(0, 8, 20))
-                                else -> listOf(ColorPlaylistStep(2, 0, 30, speed = 4), ColorPlaylistStep(4, 0, 30, speed = 5))
+                                0 -> listOf(
+                                    ColorPlaylistStep(stepId = 1, mode = 0, colorIndex = 0, durationSec = 20, speed = 5),
+                                    ColorPlaylistStep(stepId = 2, mode = 1, colorIndex = 2, durationSec = 20, speed = 5),
+                                    ColorPlaylistStep(stepId = 3, mode = 0, colorIndex = 3, durationSec = 20, speed = 5)
+                                )
+                                1 -> listOf(
+                                    ColorPlaylistStep(stepId = 1, mode = 1, colorIndex = 4, durationSec = 25, speed = 5),
+                                    ColorPlaylistStep(stepId = 2, mode = 0, colorIndex = 9, durationSec = 25, speed = 5),
+                                    ColorPlaylistStep(stepId = 3, mode = 1, colorIndex = 10, durationSec = 25, speed = 5)
+                                )
+                                2 -> listOf(
+                                    ColorPlaylistStep(stepId = 1, mode = 0, colorIndex = 2, durationSec = 20, speed = 5),
+                                    ColorPlaylistStep(stepId = 2, mode = 1, colorIndex = 3, durationSec = 20, speed = 5),
+                                    ColorPlaylistStep(stepId = 3, mode = 0, colorIndex = 8, durationSec = 20, speed = 5)
+                                )
+                                else -> listOf(
+                                    ColorPlaylistStep(stepId = 1, mode = 2, colorIndex = 0, durationSec = 30, speed = 4),
+                                    ColorPlaylistStep(stepId = 2, mode = 4, colorIndex = 0, durationSec = 30, speed = 5)
+                                )
                             }
                             viewModel.updateColorPlaylist(uiState.colorPlaylist.copy(steps = presetSteps))
                         },
@@ -2069,29 +2084,53 @@ fun EspWebUiConsole(
                             Text("${step.durationSec}s", fontSize = 11.sp, color = CyanAccent, fontFamily = FontFamily.Monospace)
                         }
 
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        var stepModeDropdown by remember { mutableStateOf(false) }
+                        var stepColorDropdown by remember { mutableStateOf(false) }
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
+                            Column(modifier = Modifier.weight(1.2f)) {
                                 Text("Mode:", fontSize = 10.sp, color = TextSecondary)
-                                OutlinedTextField(
-                                    value = when (step.mode) {
-                                        0 -> "Static"
-                                        1 -> "Smooth Fade"
-                                        2 -> "Rainbow"
-                                        3 -> "Custom RGB"
-                                        4 -> "Sweep"
-                                        else -> "Static"
-                                    },
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
+                                Box {
+                                    OutlinedButton(
+                                        onClick = { stepModeDropdown = true },
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth(),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        val mName = when (step.mode) {
+                                            0 -> "Static"
+                                            1 -> "Smooth Fade"
+                                            2 -> "Rainbow"
+                                            3 -> "Custom RGB"
+                                            4 -> "Sweep"
+                                            else -> "Static"
+                                        }
+                                        Text(mName, fontSize = 11.sp, color = GoldPrimary, maxLines = 1)
+                                    }
+                                    DropdownMenu(
+                                        expanded = stepModeDropdown,
+                                        onDismissRequest = { stepModeDropdown = false }
+                                    ) {
+                                        listOf("Static" to 0, "Smooth Fade" to 1, "Rainbow" to 2, "Custom RGB" to 3, "Sweep" to 4).forEach { (name, m) ->
+                                            DropdownMenuItem(
+                                                text = { Text(name) },
+                                                onClick = {
+                                                    val updated = uiState.colorPlaylist.steps.toMutableList()
+                                                    updated[sIdx] = step.copy(mode = m)
+                                                    viewModel.updateColorPlaylist(uiState.colorPlaylist.copy(steps = updated))
+                                                    stepModeDropdown = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
                             }
+
                             Column(modifier = Modifier.weight(1f)) {
                                 Text("Duration (s):", fontSize = 10.sp, color = TextSecondary)
                                 OutlinedTextField(
@@ -2105,6 +2144,46 @@ fun EspWebUiConsole(
                                     singleLine = true,
                                     modifier = Modifier.fillMaxWidth()
                                 )
+                            }
+                        }
+
+                        if (step.mode == 0 || step.mode == 1) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Color:", fontSize = 10.sp, color = TextSecondary)
+                                Box {
+                                    OutlinedButton(
+                                        onClick = { stepColorDropdown = true },
+                                        shape = RoundedCornerShape(6.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            colorNames.getOrElse(step.colorIndex.coerceIn(0, 11)) { "Color ${step.colorIndex}" },
+                                            fontSize = 11.sp,
+                                            color = paletteColors.getOrElse(step.colorIndex.coerceIn(0, 11)) { GoldPrimary }
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = stepColorDropdown,
+                                        onDismissRequest = { stepColorDropdown = false }
+                                    ) {
+                                        colorNames.forEachIndexed { cIdx, cName ->
+                                            DropdownMenuItem(
+                                                text = { Text(cName, color = paletteColors[cIdx]) },
+                                                onClick = {
+                                                    val updated = uiState.colorPlaylist.steps.toMutableList()
+                                                    updated[sIdx] = step.copy(colorIndex = cIdx)
+                                                    viewModel.updateColorPlaylist(uiState.colorPlaylist.copy(steps = updated))
+                                                    stepColorDropdown = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

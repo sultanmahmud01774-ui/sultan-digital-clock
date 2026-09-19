@@ -298,6 +298,14 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun pausePolling(durationMillis: Long = 12000L) {
+        stopPolling()
+        viewModelScope.launch {
+            delay(durationMillis)
+            evaluatePolling()
+        }
+    }
+
     private fun startLiveStatusPolling(host: String) {
         stopPolling()
         pollingJob = viewModelScope.launch {
@@ -308,6 +316,15 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
                     val user = _uiState.value.username
                     val pass = _uiState.value.passwordInput
                     val data = api.getStatus(host, user, pass)
+                    if (data == null) {
+                        consecutiveErrors++
+                        if (consecutiveErrors >= 3) {
+                            delay(6000)
+                        } else {
+                            delay(2500)
+                        }
+                        continue
+                    }
                     consecutiveErrors = 0
 
                     // Performance optimization: If clock data has not changed, do not trigger recomposition
@@ -591,6 +608,13 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun saveColor() {
+        _uiState.update {
+            it.copy(
+                dashboard = it.dashboard.copy(
+                    colorMode = it.colorConfig.mode
+                )
+            )
+        }
         executeAction("Save Color Mode") {
             api.saveColor(
                 _uiState.value.activeHost,
@@ -1027,7 +1051,8 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
             api.toggleColorPlaylist(
                 _uiState.value.activeHost,
                 _uiState.value.username,
-                _uiState.value.passwordInput
+                _uiState.value.passwordInput,
+                enabled = enabled
             )
         }
     }
@@ -1056,13 +1081,37 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun saveWifiConfig() {
+        val ssid = _uiState.value.wifiConfig.ssid.trim()
+        if (ssid.isEmpty()) {
+            _uiState.update {
+                it.copy(
+                    feedback = ActionFeedback(
+                        inProgress = false,
+                        actionName = "Save Wi-Fi",
+                        message = "Please enter or select a Wi-Fi SSID",
+                        timestamp = System.currentTimeMillis()
+                    )
+                )
+            }
+            return
+        }
+
         executeAction("Save Wi-Fi Network") {
-            api.saveWifi(
+            pausePolling(15000L)
+            val res = api.saveWifi(
                 _uiState.value.activeHost,
                 _uiState.value.wifiConfig,
                 _uiState.value.username,
                 _uiState.value.passwordInput
             )
+            if (res.isSuccess || res.message.contains("reboot", ignoreCase = true) || res.message.contains("offline", ignoreCase = true) || res.message.contains("timed out", ignoreCase = true)) {
+                ActionResponse(
+                    true,
+                    "Wi-Fi credentials saved! Digital clock is restarting to connect to '$ssid'. Reconnect phone to your Wi-Fi router."
+                )
+            } else {
+                res
+            }
         }
     }
 

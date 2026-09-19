@@ -541,7 +541,11 @@ fun ConnectionScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Method B — Hotspot AP ($apName)",
+                                    text = if (uiState.selectedModel == ClockModel.ESP8266) {
+                                        "Method B-Hotspot AP(SULTAN CLOCK -ESP8266)"
+                                    } else {
+                                        "Method B-Hotspot AP(SULTAN CLOCK_AP)"
+                                    },
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = TextPrimary

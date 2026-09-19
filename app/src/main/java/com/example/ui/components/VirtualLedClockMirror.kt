@@ -94,35 +94,27 @@ fun VirtualLedClockMirror(
         Color(colorConfig.red, colorConfig.green, colorConfig.blue)
     }
 
-    // Only run infinite transitions if display is on AND an animated mode is selected
+    // Smooth transitions for animated color modes
     val infiniteTransition = rememberInfiniteTransition(label = "LedClockAnim")
-    val rainbowHue by if (isAnimatedMode && dashboardData.isDisplayOn && (colorConfig.mode == 2 || colorConfig.mode == 4)) {
-        infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 6000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "RainbowHue"
-        )
-    } else {
-        remember { mutableFloatStateOf(0f) }
-    }
+    val rainbowHue by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 6000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "RainbowHue"
+    )
 
-    val fadeAlpha by if (isAnimatedMode && dashboardData.isDisplayOn && colorConfig.mode == 1) {
-        infiniteTransition.animateFloat(
-            initialValue = 0.35f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 2000, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "FadeAlpha"
-        )
-    } else {
-        remember { mutableFloatStateOf(1f) }
-    }
+    val fadeAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "FadeAlpha"
+    )
 
     // Determine primary segment color based on Clock's active color mode
     val activeBaseColor = when (colorConfig.mode) {

@@ -130,7 +130,7 @@ open class Esp32Api {
         host: String,
         user: String = "admin",
         pass: String = ""
-    ): ClockDashboardData = withContext(Dispatchers.IO) {
+    ): ClockDashboardData? = withContext(Dispatchers.IO) {
         val client = getClientWithAuth(user, pass)
 
         // 1. Try /api/status first (if firmware provides JSON)
@@ -167,14 +167,14 @@ open class Esp32Api {
                     return@withContext parseRootHtml(html, host)
                 } else if (response.code == 401) {
                     Log.w(TAG, "getStatus 401 Unauthorized for $host")
-                    return@withContext ClockDashboardData(ipAddress = host)
+                    return@withContext null
                 }
             }
         } catch (e: Exception) {
             Log.w(TAG, "getStatus unreachable or offline: ${e.message}")
         }
 
-        ClockDashboardData(ipAddress = host)
+        null
     }
 
     /**
@@ -499,7 +499,7 @@ open class Esp32Api {
         host: String,
         user: String = "admin",
         pass: String = ""
-    ): ClockDashboardData = getStatus(host, user, pass)
+    ): ClockDashboardData? = getStatus(host, user, pass)
 
     /**
      * Helper to send GET command to ESP32 with body-aware success detection
@@ -533,14 +533,15 @@ open class Esp32Api {
                 val responseBody = response.body?.string()?.trim() ?: ""
                 when {
                     response.code == 401 -> ActionResponse(false, "Authentication failed (401)")
-                    !response.isSuccessful -> ActionResponse(false, "ESP32 returned HTTP ${response.code}", responseBody)
-                    responseBody == "OK" || responseBody == "ON" || responseBody == "OFF" ->
-                        ActionResponse(true, responseBody, responseBody)
+                    !response.isSuccessful -> ActionResponse(false, "Clock returned HTTP ${response.code}", responseBody)
+                    responseBody.contains("error", ignoreCase = true) ||
+                    responseBody.contains("failed", ignoreCase = true) ||
+                    responseBody.contains("invalid", ignoreCase = true) ->
+                        ActionResponse(false, responseBody.ifBlank { "Command rejected by clock" }, responseBody)
                     responseBody == "CONFLICT" ->
                         ActionResponse(true, "Saved, but Alarm 1 and Alarm 2 are set to the same time — only one will ring", responseBody)
                     else ->
-                        // Firmware returns HTTP 200 with error message body on validation failures
-                        ActionResponse(false, responseBody, responseBody)
+                        ActionResponse(true, if (responseBody.isNotBlank()) responseBody else "Command executed successfully", responseBody)
                 }
             }
         } catch (e: java.net.SocketTimeoutException) {
@@ -688,13 +689,18 @@ open class Esp32Api {
     ): ActionResponse {
         val params = mapOf(
             "m" to config.mode.toString(),
+            "mode" to config.mode.toString(),
+            "colormode" to config.mode.toString(),
             "sc" to config.staticColorIndex.toString(),
+            "color" to config.staticColorIndex.toString(),
             "ci" to config.colorIntervalSec.toString(),
+            "interval" to config.colorIntervalSec.toString(),
             "r" to config.red.toString(),
             "g" to config.green.toString(),
             "b" to config.blue.toString(),
             "spd" to config.animSpeed.toString(),
-            "sp" to config.animSpeed.toString() // For ESP8266 animSpeed compatibility
+            "speed" to config.animSpeed.toString(),
+            "sp" to config.animSpeed.toString()
         )
         return sendGet(host, "/savecolor", params, user, pass)
     }
@@ -862,22 +868,39 @@ open class Esp32Api {
         user: String,
         pass: String
     ): ActionResponse {
-        val params = mutableMapOf("en" to "1", "cnt" to config.steps.size.coerceAtMost(5).toString())
-        config.steps.take(5).forEachIndexed { i, step ->
+        val count = config.steps.size.coerceIn(1, 8)
+        val params = mutableMapOf(
+            "en" to if (config.enabled) "1" else "0",
+            "cnt" to count.toString(),
+            "count" to count.toString()
+        )
+        config.steps.take(count).forEachIndexed { i, step ->
             params["m$i"] = step.mode.toString()
+            params["mode$i"] = step.mode.toString()
             params["ci$i"] = step.colorIndex.toString()
+            params["sc$i"] = step.colorIndex.toString()
+            params["color$i"] = step.colorIndex.toString()
             params["r$i"] = step.red.toString()
             params["g$i"] = step.green.toString()
             params["b$i"] = step.blue.toString()
             params["d$i"] = step.durationSec.toString()
+            params["dur$i"] = step.durationSec.toString()
+            params["duration$i"] = step.durationSec.toString()
             params["spd$i"] = step.speed.coerceIn(1, 10).toString()
+            params["speed$i"] = step.speed.coerceIn(1, 10).toString()
             params["sp$i"] = step.speed.coerceIn(1, 10).toString()
         }
         return sendGet(host, "/saveplaylist", params, user, pass)
     }
 
-    suspend fun toggleColorPlaylist(host: String, user: String, pass: String): ActionResponse {
-        return sendGet(host, "/toggleplaylist", emptyMap(), user, pass)
+    suspend fun toggleColorPlaylist(host: String, user: String, pass: String, enabled: Boolean? = null): ActionResponse {
+        val params = if (enabled != null) mapOf("en" to if (enabled) "1" else "0") else emptyMap()
+        val res = sendGet(host, "/toggleplaylist", params, user, pass)
+        return if (!res.isSuccess && enabled != null) {
+            sendGet(host, "/saveplaylist", mapOf("en" to if (enabled) "1" else "0"), user, pass)
+        } else {
+            res
+        }
     }
 
     // 14. Wi-Fi Scan & Configuration
