@@ -145,7 +145,7 @@ fun SettingsScreen(
                         border = androidx.compose.foundation.BorderStroke(1.dp, if (isEsp8266) AmberOrange else CardBorder),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Icon(Icons.Default.Mosque, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.AccessTime, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("ESP8266 Profile", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }

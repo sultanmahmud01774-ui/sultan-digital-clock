@@ -15,19 +15,19 @@ enum class ClockModel(
     val description: String,
     val defaultApSsid: String
 ) {
-    ESP32(
-        id = "esp32",
-        title = "ESP32 Smart Clock",
-        shortName = "ESP32",
-        description = "Full Audio, DFPlayer, Azan & Sensor Support",
-        defaultApSsid = "Sultan_Clock_AP"
-    ),
     ESP8266(
         id = "esp8266",
-        title = "ESP8266 Smart Clock (AI Elite Edition)",
-        shortName = "ESP8266 AI Elite",
-        description = "AI Elite Matrix: DFPlayer, Azan, Weekly Playlist & NeoPixel",
-        defaultApSsid = "SULTAN CLOCK -ESP8266"
+        title = "ESP8266 Clock Hub",
+        shortName = "ESP8266",
+        description = "Smart Clock: 192.168.4.1 -> 192.168.0.xxx Setup, Buzzer & D7 Light",
+        defaultApSsid = "SULTAN DIGITAL CLOCK"
+    ),
+    ESP32(
+        id = "esp32",
+        title = "ESP32 Clock Hub",
+        shortName = "ESP32",
+        description = "Dual-Core Edition: DFPlayer Audio, Azan System & Animations",
+        defaultApSsid = "Sultan_Clock_AP"
     );
 
     val displayName: String get() = title
@@ -220,7 +220,8 @@ data class ColorPlaylistStep(
     val green: Int = 100,
     val blue: Int = 50,
     val durationSec: Int = 10,
-    val speed: Int = 5
+    val speed: Int = 5,
+    val colorChangeSec: Int = 10
 )
 
 data class ColorPlaylistConfig(

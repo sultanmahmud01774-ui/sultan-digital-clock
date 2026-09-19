@@ -35,7 +35,8 @@ import com.example.ui.theme.*
 import com.example.ui.viewmodel.ClockViewModel
 
 enum class MainNavScreen(val title: String, val icon: ImageVector) {
-    HOME("Home", Icons.Default.Dashboard),
+    ESP8266_HUB("ESP8266", Icons.Default.AccessTime),
+    ESP32_HUB("ESP32", Icons.Default.Memory),
     CONTROLS("Controls", Icons.Default.Tune),
     SCHEDULE("Schedule", Icons.Default.AccessTime),
     SETTINGS("Settings", Icons.Default.Settings)
@@ -60,7 +61,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun SultanClockMainApp(viewModel: ClockViewModel) {
     val uiState by viewModel.uiState.collectAsState()
-    var currentScreen by remember { mutableStateOf(MainNavScreen.HOME) }
+    var currentScreen by remember {
+        mutableStateOf(
+            if (uiState.selectedModel == ClockModel.ESP8266) MainNavScreen.ESP8266_HUB else MainNavScreen.ESP32_HUB
+        )
+    }
     var userBypassedConnection by remember { mutableStateOf(false) }
     var isForeground by remember { mutableStateOf(true) }
 
@@ -71,12 +76,12 @@ fun SultanClockMainApp(viewModel: ClockViewModel) {
             when (event) {
                 Lifecycle.Event.ON_RESUME -> {
                     isForeground = true
-                    val isHomeOrControls = currentScreen == MainNavScreen.HOME || currentScreen == MainNavScreen.CONTROLS
+                    val isHomeOrControls = currentScreen == MainNavScreen.ESP8266_HUB || currentScreen == MainNavScreen.ESP32_HUB || currentScreen == MainNavScreen.CONTROLS
                     viewModel.updateVisibility(isHomeOrControls = isHomeOrControls, isForeground = true)
                 }
                 Lifecycle.Event.ON_PAUSE -> {
                     isForeground = false
-                    val isHomeOrControls = currentScreen == MainNavScreen.HOME || currentScreen == MainNavScreen.CONTROLS
+                    val isHomeOrControls = currentScreen == MainNavScreen.ESP8266_HUB || currentScreen == MainNavScreen.ESP32_HUB || currentScreen == MainNavScreen.CONTROLS
                     viewModel.updateVisibility(isHomeOrControls = isHomeOrControls, isForeground = false)
                 }
                 else -> {}
@@ -90,8 +95,17 @@ fun SultanClockMainApp(viewModel: ClockViewModel) {
 
     // Update visibility state when current navigation tab changes
     LaunchedEffect(currentScreen, isForeground) {
-        val isHomeOrControls = currentScreen == MainNavScreen.HOME || currentScreen == MainNavScreen.CONTROLS
+        val isHomeOrControls = currentScreen == MainNavScreen.ESP8266_HUB || currentScreen == MainNavScreen.ESP32_HUB || currentScreen == MainNavScreen.CONTROLS
         viewModel.updateVisibility(isHomeOrControls = isHomeOrControls, isForeground = isForeground)
+    }
+
+    // Synchronize navigation screen when model is updated elsewhere (e.g. from topbar or settings)
+    LaunchedEffect(uiState.selectedModel) {
+        if (currentScreen == MainNavScreen.ESP8266_HUB && uiState.selectedModel == ClockModel.ESP32) {
+            currentScreen = MainNavScreen.ESP32_HUB
+        } else if (currentScreen == MainNavScreen.ESP32_HUB && uiState.selectedModel == ClockModel.ESP8266) {
+            currentScreen = MainNavScreen.ESP8266_HUB
+        }
     }
 
     // Show connection screen when not connected, unless user deliberately skipped to offline mode
@@ -155,6 +169,7 @@ fun SultanClockMainApp(viewModel: ClockViewModel) {
                                 .clickable {
                                     val nextModel = if (uiState.selectedModel == ClockModel.ESP32) ClockModel.ESP8266 else ClockModel.ESP32
                                     viewModel.setClockModel(nextModel)
+                                    currentScreen = if (nextModel == ClockModel.ESP8266) MainNavScreen.ESP8266_HUB else MainNavScreen.ESP32_HUB
                                 }
                                 .testTag("topbar_model_switcher")
                         ) {
@@ -163,7 +178,7 @@ fun SultanClockMainApp(viewModel: ClockViewModel) {
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                             ) {
                                 Icon(
-                                    imageVector = if (uiState.selectedModel == ClockModel.ESP8266) Icons.Default.Mosque else Icons.Default.Memory,
+                                    imageVector = if (uiState.selectedModel == ClockModel.ESP8266) Icons.Default.AccessTime else Icons.Default.Memory,
                                     contentDescription = null,
                                     tint = if (uiState.selectedModel == ClockModel.ESP8266) AmberOrange else CyanAccent,
                                     modifier = Modifier.size(14.dp)
@@ -207,26 +222,38 @@ fun SultanClockMainApp(viewModel: ClockViewModel) {
                 ) {
                     MainNavScreen.values().forEach { screen ->
                         val isSelected = currentScreen == screen
+                        val tintColor = when (screen) {
+                            MainNavScreen.ESP8266_HUB -> AmberOrange
+                            MainNavScreen.ESP32_HUB -> CyanAccent
+                            else -> GoldPrimary
+                        }
                         NavigationBarItem(
                             selected = isSelected,
-                            onClick = { currentScreen = screen },
+                            onClick = {
+                                currentScreen = screen
+                                if (screen == MainNavScreen.ESP8266_HUB) {
+                                    viewModel.setClockModel(ClockModel.ESP8266)
+                                } else if (screen == MainNavScreen.ESP32_HUB) {
+                                    viewModel.setClockModel(ClockModel.ESP32)
+                                }
+                            },
                             icon = {
                                 Icon(
                                     imageVector = screen.icon,
                                     contentDescription = screen.title,
-                                    tint = if (isSelected) GoldPrimary else TextMuted
+                                    tint = if (isSelected) tintColor else TextMuted
                                 )
                             },
                             label = {
                                 Text(
                                     text = screen.title,
-                                    fontSize = 11.sp,
+                                    fontSize = 10.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) GoldPrimary else TextSecondary
+                                    color = if (isSelected) tintColor else TextSecondary
                                 )
                             },
                             colors = NavigationBarItemDefaults.colors(
-                                indicatorColor = GoldPrimary.copy(alpha = 0.15f)
+                                indicatorColor = tintColor.copy(alpha = 0.15f)
                             ),
                             modifier = Modifier.testTag("nav_${screen.name.lowercase()}")
                         )
@@ -244,10 +271,21 @@ fun SultanClockMainApp(viewModel: ClockViewModel) {
                     label = "screen_transition"
                 ) { target ->
                     when (target) {
-                        MainNavScreen.HOME -> DashboardScreen(
+                        MainNavScreen.ESP8266_HUB -> Esp8266HubScreen(
                             viewModel = viewModel,
                             uiState = uiState,
-                            onNavigateToConnection = { userBypassedConnection = false }
+                            onSwitchToEsp32 = {
+                                viewModel.setClockModel(ClockModel.ESP32)
+                                currentScreen = MainNavScreen.ESP32_HUB
+                            }
+                        )
+                        MainNavScreen.ESP32_HUB -> Esp32HubScreen(
+                            viewModel = viewModel,
+                            uiState = uiState,
+                            onSwitchToEsp8266 = {
+                                viewModel.setClockModel(ClockModel.ESP8266)
+                                currentScreen = MainNavScreen.ESP8266_HUB
+                            }
                         )
                         MainNavScreen.CONTROLS -> ControlsScreen(
                             viewModel = viewModel,

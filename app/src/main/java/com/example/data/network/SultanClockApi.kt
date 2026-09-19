@@ -366,7 +366,7 @@ open class Esp32Api {
                     (!html.contains("DFPlayer", ignoreCase = true) && !html.contains("prayerstatus", ignoreCase = true) && html.contains("sultan", ignoreCase = true))
 
             val detectedModel = if (isEsp8266) ClockModel.ESP8266 else ClockModel.ESP32
-            val fwVersion = if (isEsp8266) "v3.5-ESP8266-Masjid" else "v5.0-ESP32"
+            val fwVersion = if (isEsp8266) "v3.5-ESP8266" else "v5.0-ESP32"
 
             // 2. Hardware Switch States
             val isDisplayOn = extractRegex("id=['\"]displaystatus['\"][^>]*class=['\"]status-([a-zA-Z]+)['\"]", "on").equals("on", ignoreCase = true)
@@ -534,13 +534,16 @@ open class Esp32Api {
                 when {
                     response.code == 401 -> ActionResponse(false, "Authentication failed (401)")
                     !response.isSuccessful -> ActionResponse(false, "Clock returned HTTP ${response.code}", responseBody)
-                    responseBody.contains("error", ignoreCase = true) ||
-                    responseBody.contains("failed", ignoreCase = true) ||
-                    responseBody.contains("invalid", ignoreCase = true) ->
+                    // Robust JSON error checking
+                    responseBody.startsWith("{") && responseBody.contains("\"error\":true", ignoreCase = true) ->
                         ActionResponse(false, responseBody.ifBlank { "Command rejected by clock" }, responseBody)
+                    // Brief explicit error message from MCU
+                    responseBody.length in 1..50 && (responseBody.startsWith("ERROR", ignoreCase = true) || responseBody.startsWith("FAIL", ignoreCase = true)) ->
+                        ActionResponse(false, responseBody, responseBody)
                     responseBody == "CONFLICT" ->
                         ActionResponse(true, "Saved, but Alarm 1 and Alarm 2 are set to the same time — only one will ring", responseBody)
                     else ->
+                        // Robust HTTP 200 parsing: If HTTP status is 200, it is considered a success even if returning HTML or simple text
                         ActionResponse(true, if (responseBody.isNotBlank()) responseBody else "Command executed successfully", responseBody)
                 }
             }
@@ -680,29 +683,56 @@ open class Esp32Api {
         return sendGet(host, "/savebright", params, user, pass)
     }
 
-    // 7. Color Control
-    suspend fun saveColor(
+    // 7. Color Control - Strictly separated for ESP8266 vs ESP32
+    suspend fun saveColorEsp8266(
+        host: String,
+        config: ColorConfig,
+        user: String,
+        pass: String
+    ): ActionResponse {
+        // ESP8266 firmware accepts strictly short codes: m, sc, ci, r, g, b, spd
+        val params = mapOf(
+            "m" to config.mode.toString(),
+            "sc" to config.staticColorIndex.toString(),
+            "ci" to config.colorIntervalSec.toString(),
+            "r" to config.red.toString(),
+            "g" to config.green.toString(),
+            "b" to config.blue.toString(),
+            "spd" to config.animSpeed.coerceIn(1, 10).toString()
+        )
+        return sendGet(host, "/savecolor", params, user, pass)
+    }
+
+    suspend fun saveColorEsp32(
         host: String,
         config: ColorConfig,
         user: String,
         pass: String
     ): ActionResponse {
         val params = mapOf(
-            "m" to config.mode.toString(),
             "mode" to config.mode.toString(),
-            "colormode" to config.mode.toString(),
             "sc" to config.staticColorIndex.toString(),
-            "color" to config.staticColorIndex.toString(),
-            "ci" to config.colorIntervalSec.toString(),
             "interval" to config.colorIntervalSec.toString(),
             "r" to config.red.toString(),
             "g" to config.green.toString(),
             "b" to config.blue.toString(),
-            "spd" to config.animSpeed.toString(),
-            "speed" to config.animSpeed.toString(),
-            "sp" to config.animSpeed.toString()
+            "speed" to config.animSpeed.coerceIn(1, 10).toString()
         )
         return sendGet(host, "/savecolor", params, user, pass)
+    }
+
+    suspend fun saveColor(
+        host: String,
+        config: ColorConfig,
+        user: String,
+        pass: String,
+        model: ClockModel = ClockModel.ESP8266
+    ): ActionResponse {
+        return if (model == ClockModel.ESP8266) {
+            saveColorEsp8266(host, config, user, pass)
+        } else {
+            saveColorEsp32(host, config, user, pass)
+        }
     }
 
     // 8. Display Schedule
@@ -861,8 +891,8 @@ open class Esp32Api {
         return sendGet(host, "/saveweeklyplaylist", params, user, pass)
     }
 
-    // 13. Color Playlist
-    suspend fun saveColorPlaylist(
+    // 13. Color Playlist - Strictly separated for ESP8266 vs ESP32
+    suspend fun saveColorPlaylistEsp8266(
         host: String,
         config: ColorPlaylistConfig,
         user: String,
@@ -871,26 +901,56 @@ open class Esp32Api {
         val count = config.steps.size.coerceIn(1, 8)
         val params = mutableMapOf(
             "en" to if (config.enabled) "1" else "0",
-            "cnt" to count.toString(),
-            "count" to count.toString()
+            "cnt" to count.toString()
         )
         config.steps.take(count).forEachIndexed { i, step ->
             params["m$i"] = step.mode.toString()
-            params["mode$i"] = step.mode.toString()
             params["ci$i"] = step.colorIndex.toString()
-            params["sc$i"] = step.colorIndex.toString()
-            params["color$i"] = step.colorIndex.toString()
             params["r$i"] = step.red.toString()
             params["g$i"] = step.green.toString()
             params["b$i"] = step.blue.toString()
             params["d$i"] = step.durationSec.toString()
-            params["dur$i"] = step.durationSec.toString()
-            params["duration$i"] = step.durationSec.toString()
             params["spd$i"] = step.speed.coerceIn(1, 10).toString()
-            params["speed$i"] = step.speed.coerceIn(1, 10).toString()
-            params["sp$i"] = step.speed.coerceIn(1, 10).toString()
+            params["cc$i"] = step.colorChangeSec.coerceIn(1, step.durationSec).toString()
         }
         return sendGet(host, "/saveplaylist", params, user, pass)
+    }
+
+    suspend fun saveColorPlaylistEsp32(
+        host: String,
+        config: ColorPlaylistConfig,
+        user: String,
+        pass: String
+    ): ActionResponse {
+        val count = config.steps.size.coerceIn(1, 8)
+        val params = mutableMapOf(
+            "en" to if (config.enabled) "1" else "0",
+            "count" to count.toString()
+        )
+        config.steps.take(count).forEachIndexed { i, step ->
+            params["mode$i"] = step.mode.toString()
+            params["color$i"] = step.colorIndex.toString()
+            params["r$i"] = step.red.toString()
+            params["g$i"] = step.green.toString()
+            params["b$i"] = step.blue.toString()
+            params["speed$i"] = step.speed.coerceIn(1, 10).toString()
+            params["duration$i"] = step.durationSec.toString()
+        }
+        return sendGet(host, "/saveplaylist", params, user, pass)
+    }
+
+    suspend fun saveColorPlaylist(
+        host: String,
+        config: ColorPlaylistConfig,
+        user: String,
+        pass: String,
+        model: ClockModel = ClockModel.ESP8266
+    ): ActionResponse {
+        return if (model == ClockModel.ESP8266) {
+            saveColorPlaylistEsp8266(host, config, user, pass)
+        } else {
+            saveColorPlaylistEsp32(host, config, user, pass)
+        }
     }
 
     suspend fun toggleColorPlaylist(host: String, user: String, pass: String, enabled: Boolean? = null): ActionResponse {

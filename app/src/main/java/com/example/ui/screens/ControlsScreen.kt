@@ -346,7 +346,7 @@ fun ControlsScreen(
             Spacer(modifier = Modifier.height(20.dp))
         }
 
-        // --- ESP8266 MASJID BUZZER & TONE CONTROLS (ESP8266 ONLY) ---
+        // --- ESP8266 BUZZER & TONE CONTROLS (ESP8266 ONLY) ---
         if (uiState.selectedModel == ClockModel.ESP8266) {
             item {
                 SectionHeader(

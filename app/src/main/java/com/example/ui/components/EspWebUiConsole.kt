@@ -36,7 +36,7 @@ import com.example.ui.viewmodel.SultanClockUiState
  * 4. 🕐 Time Sync (Phone & NTP UTC+6)
  * 5. 📅 Smart Date Display (English & Bangla checkboxes)
  * 6. 🎵 Hourly Tone (Active Range, Random/Sequential/Fixed modes, and 13 RTTTL test buttons)
- * 7. 🕌 Prayer (Azan) Settings (Methods & 10 Waqt Golden Grid)
+ * 7. ⏰ Prayer (Azan) Settings (Methods & 10 Waqt Golden Grid)
  * 8. 📶 WiFi Settings (Scan, SSID, Password, Static IP)
  * 9. ⚙️ Display Settings (12/24H, Colon Blink, Show Date, Bangla Digits)
  * 10. ⏰ Alarms (Alarm 1 & 2 with Ringtone dropdown & Test button)
@@ -196,7 +196,7 @@ fun EspWebUiConsole(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.Mosque,
+                    imageVector = Icons.Default.AccessTime,
                     contentDescription = "Sultan Clock Avatar",
                     tint = GoldPrimary,
                     modifier = Modifier.size(34.dp)
@@ -802,14 +802,14 @@ fun EspWebUiConsole(
         }
 
         // ==========================================
-        // SECTION 6: 🕌 PRAYER (AZAN) SETTINGS / আযান ওয়াক্ত
+        // SECTION 6: ⏰ PRAYER (AZAN) SETTINGS / আযান ওয়াক্ত
         // ==========================================
         GlassCard {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(imageVector = Icons.Default.Mosque, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(20.dp))
+                Icon(imageVector = Icons.Default.AccessTime, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "PRAYER (AZAN) SETTINGS",

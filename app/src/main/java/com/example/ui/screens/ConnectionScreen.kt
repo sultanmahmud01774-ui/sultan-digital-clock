@@ -196,8 +196,8 @@ fun ConnectionScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.Center
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Mosque,
+                                     Icon(
+                                        imageVector = Icons.Default.AccessTime,
                                         contentDescription = null,
                                         tint = if (isEsp8266) AmberOrange else TextMuted,
                                         modifier = Modifier.size(18.dp)
@@ -211,7 +211,7 @@ fun ConnectionScreen(
                                             color = if (isEsp8266) AmberOrange else TextPrimary
                                         )
                                         Text(
-                                            text = "Masjid & Buzzer",
+                                            text = "Clock & Buzzer",
                                             fontSize = 9.sp,
                                             color = TextSecondary
                                         )

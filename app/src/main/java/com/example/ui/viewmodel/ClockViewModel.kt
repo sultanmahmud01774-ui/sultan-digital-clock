@@ -31,7 +31,7 @@ data class SultanClockUiState(
     val selectedModel: ClockModel = ClockModel.ESP8266,
     val connectionStatus: ConnectionStatus = ConnectionStatus.DISCONNECTED,
     val connectionMessage: String = "Ready to connect",
-    val activeHost: String = "sultanclock.local",
+    val activeHost: String = "192.168.4.1",
     val username: String = "admin",
     val passwordInput: String = "",
     val rememberPassword: Boolean = true,
@@ -40,6 +40,17 @@ data class SultanClockUiState(
     val manualIpInput: String = "",
     val savedIps: Set<String> = emptySet(),
     val wifiPasswordDisplay: String? = null,
+
+    // Real-World ESP8266 Setup & Safe Reboot State
+    val isRebooting: Boolean = false,
+    val rebootCountdownSec: Int = 0,
+    val rebootTargetIp: String = "",
+    val esp8266RouterSsid: String = "",
+    val esp8266RouterPass: String = "",
+    val esp8266UseStaticIp: Boolean = true,
+    val esp8266StaticIp: String = "192.168.0.108",
+    val esp8266Gateway: String = "192.168.0.1",
+    val esp8266Subnet: String = "255.255.255.0",
     
     // Live Dashboard Telemetry
     val dashboard: ClockDashboardData = ClockDashboardData(),
@@ -93,15 +104,20 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(
         SultanClockUiState(
             selectedModel = prefs.clockModel,
-            activeHost = prefs.ipAddress,
+            activeHost = prefs.getIpForModel(prefs.clockModel),
             username = prefs.username,
             passwordInput = prefs.password,
             rememberPassword = prefs.rememberPassword,
             autoConnect = prefs.autoConnect,
-            manualIpInput = prefs.ipAddress,
+            manualIpInput = prefs.getIpForModel(prefs.clockModel),
             savedIps = prefs.getSavedIps(),
             trackNames = prefs.getTrackNames(),
-            savedProfiles = prefs.getSavedProfiles()
+            savedProfiles = prefs.getSavedProfiles(),
+            esp8266RouterSsid = prefs.esp8266RouterSsid,
+            esp8266UseStaticIp = prefs.esp8266UseStaticIp,
+            esp8266StaticIp = prefs.esp8266StaticIp,
+            esp8266Gateway = prefs.esp8266Gateway,
+            esp8266Subnet = prefs.esp8266Subnet
         )
     )
     val uiState: StateFlow<SultanClockUiState> = _uiState.asStateFlow()
@@ -120,14 +136,28 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
     // --- CLOCK MODEL SELECTION (ESP32 vs ESP8266) ---
 
     fun setClockModel(model: ClockModel) {
+        if (_uiState.value.selectedModel == model) return
         prefs.clockModel = model
-        _uiState.update { it.copy(selectedModel = model) }
+        val targetIp = prefs.getIpForModel(model)
+        stopPolling()
+        _uiState.update {
+            it.copy(
+                selectedModel = model,
+                activeHost = targetIp,
+                manualIpInput = targetIp,
+                connectionStatus = ConnectionStatus.CONNECTING,
+                connectionMessage = "Switched to ${model.title}. Connecting to $targetIp..."
+            )
+        }
+        connectToClock(targetIp)
     }
 
     // --- CONNECTION MANAGEMENT ---
 
     fun setHost(host: String) {
-        _uiState.update { it.copy(activeHost = host.trim()) }
+        val cleanHost = host.trim()
+        prefs.setIpForModel(_uiState.value.selectedModel, cleanHost)
+        _uiState.update { it.copy(activeHost = cleanHost, manualIpInput = cleanHost) }
     }
 
     fun setUsername(user: String) {
@@ -160,7 +190,7 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
         val ip = _uiState.value.manualIpInput.trim()
         if (ip.isNotEmpty()) {
             prefs.addSavedIp(ip)
-            prefs.ipAddress = ip
+            prefs.setIpForModel(_uiState.value.selectedModel, ip)
             _uiState.update {
                 it.copy(
                     activeHost = ip,
@@ -175,6 +205,169 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
     fun removeSavedIp(ip: String) {
         prefs.removeSavedIp(ip)
         _uiState.update { it.copy(savedIps = prefs.getSavedIps()) }
+    }
+
+    // --- DEDICATED REAL-WORLD ESP8266 SETUP & REBOOT WORKFLOW ---
+
+    fun connectToEsp8266Ap() {
+        val apIp = DevicePreferences.DEFAULT_AP_IP
+        setClockModel(ClockModel.ESP8266)
+        setHost(apIp)
+        connectToClock(apIp)
+    }
+
+    fun updateEsp8266SetupConfig(
+        ssid: String? = null,
+        pass: String? = null,
+        useStaticIp: Boolean? = null,
+        staticIp: String? = null,
+        gateway: String? = null,
+        subnet: String? = null
+    ) {
+        _uiState.update {
+            it.copy(
+                esp8266RouterSsid = ssid ?: it.esp8266RouterSsid,
+                esp8266RouterPass = pass ?: it.esp8266RouterPass,
+                esp8266UseStaticIp = useStaticIp ?: it.esp8266UseStaticIp,
+                esp8266StaticIp = staticIp ?: it.esp8266StaticIp,
+                esp8266Gateway = gateway ?: it.esp8266Gateway,
+                esp8266Subnet = subnet ?: it.esp8266Subnet
+            )
+        }
+    }
+
+    fun saveEsp8266WifiAndReboot(
+        ssid: String = _uiState.value.esp8266RouterSsid,
+        pass: String = _uiState.value.esp8266RouterPass,
+        useStaticIp: Boolean = _uiState.value.esp8266UseStaticIp,
+        staticIp: String = _uiState.value.esp8266StaticIp,
+        gateway: String = _uiState.value.esp8266Gateway,
+        subnet: String = _uiState.value.esp8266Subnet
+    ) {
+        viewModelScope.launch {
+            val cleanSsid = ssid.trim()
+            if (cleanSsid.isEmpty()) {
+                _uiState.update {
+                    it.copy(
+                        feedback = ActionFeedback(
+                            inProgress = false,
+                            actionName = "Save Wi-Fi",
+                            message = "অনুগ্রহ করে আপনার রাউটারের Wi-Fi SSID দিন বা স্ক্যান করুন",
+                            timestamp = System.currentTimeMillis()
+                        )
+                    )
+                }
+                return@launch
+            }
+
+            val assignedIp = if (useStaticIp && staticIp.isNotBlank()) staticIp.trim() else "192.168.0.108"
+
+            // Step 4 (Permanent Control IP): Once saved, automatically remember and set this assigned IP (e.g. 192.168.0.108) as the active host address in SharedPreferences for all future 24/7 controls without needing AP mode again.
+            prefs.esp8266RouterSsid = cleanSsid
+            prefs.esp8266UseStaticIp = useStaticIp
+            prefs.esp8266StaticIp = assignedIp
+            prefs.esp8266Gateway = gateway.trim()
+            prefs.esp8266Subnet = subnet.trim()
+            prefs.setIpForModel(ClockModel.ESP8266, assignedIp)
+            prefs.addSavedIp(assignedIp)
+
+            val currentHost = _uiState.value.activeHost
+            val wifiConfig = WifiConfig(
+                enabled = true,
+                ssid = cleanSsid,
+                isOpen = pass.isEmpty(),
+                password = pass,
+                isStatic = useStaticIp,
+                ip = assignedIp,
+                gateway = gateway.trim().ifBlank { "192.168.0.1" },
+                subnet = subnet.trim().ifBlank { "255.255.255.0" }
+            )
+
+            _uiState.update {
+                it.copy(
+                    feedback = ActionFeedback(
+                        inProgress = true,
+                        actionName = "রাউটারে Wi-Fi ও IP ($assignedIp) পাঠানো হচ্ছে..."
+                    )
+                )
+            }
+
+            // Send /savewifi to current host (typically 192.168.4.1)
+            api.saveWifi(currentHost, wifiConfig, _uiState.value.username, _uiState.value.passwordInput)
+
+            // Step 5 (Safe Reboot Handling): When saving Wi-Fi & IP, pause background status polling for 15 seconds to prevent network socket drops or app crashes while the ESP8266 restarts.
+            stopPolling()
+
+            _uiState.update {
+                it.copy(
+                    isRebooting = true,
+                    rebootCountdownSec = 15,
+                    rebootTargetIp = assignedIp,
+                    activeHost = assignedIp,
+                    manualIpInput = assignedIp,
+                    connectionStatus = ConnectionStatus.CONNECTING,
+                    connectionMessage = "ESP8266 রিস্টার্ট হচ্ছে... অনুগ্রহ করে আপনার ফোনের ওয়াই-ফাই রাউটারে ($cleanSsid) যুক্ত করুন।",
+                    feedback = ActionFeedback(
+                        inProgress = true,
+                        actionName = "ESP8266 রিবুট হচ্ছে ($assignedIp)..."
+                    )
+                )
+            }
+
+            // 15-second countdown with visual progress
+            for (sec in 15 downTo 1) {
+                _uiState.update { it.copy(rebootCountdownSec = sec) }
+                delay(1000L)
+            }
+
+            _uiState.update {
+                it.copy(
+                    isRebooting = false,
+                    rebootCountdownSec = 0,
+                    connectionStatus = ConnectionStatus.CONNECTING,
+                    connectionMessage = "স্থায়ী IP ($assignedIp) এ ঘড়ির সাথে যুক্ত হওয়া হচ্ছে...",
+                    feedback = ActionFeedback(
+                        inProgress = false,
+                        isSuccess = true,
+                        message = "Wi-Fi ও IP সংরক্ষিত হয়েছে! স্থায়ী IP $assignedIp এ কানেক্ট করা হচ্ছে।",
+                        timestamp = System.currentTimeMillis()
+                    )
+                )
+            }
+
+            // Connect automatically to the permanent IP
+            connectToClock(assignedIp)
+        }
+    }
+
+    fun resetEsp8266DefaultPassword() {
+        executeAction("Reset Default Password (sultan88)") {
+            api.resetDefaultPassword(
+                _uiState.value.activeHost,
+                _uiState.value.username,
+                _uiState.value.passwordInput
+            )
+        }
+    }
+
+    fun testEsp8266Buzzer() {
+        testBuzzerBeep()
+    }
+
+    fun saveEsp8266DateDisplay(englishDate: Boolean, banglaDate: Boolean) {
+        val config = _uiState.value.dateSettings.copy(
+            isDateEnabled = englishDate,
+            isBanglaDate = banglaDate
+        )
+        _uiState.update { it.copy(dateSettings = config) }
+        executeAction("Save Date Display Settings") {
+            api.saveDateSettings(
+                _uiState.value.activeHost,
+                config,
+                _uiState.value.username,
+                _uiState.value.passwordInput
+            )
+        }
     }
 
     fun connectToClock(targetHost: String? = null) {
@@ -287,7 +480,8 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
     private fun evaluatePolling() {
         val shouldPoll = isAppForeground &&
                 isHomeOrControlsVisible &&
-                _uiState.value.connectionStatus == ConnectionStatus.CONNECTED
+                _uiState.value.connectionStatus == ConnectionStatus.CONNECTED &&
+                !_uiState.value.isRebooting
 
         if (shouldPoll) {
             if (pollingJob == null || pollingJob?.isActive != true) {
@@ -597,6 +791,14 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(colorConfig = it.colorConfig.copy(mode = mode)) }
     }
 
+    fun updateStaticColorIndex(index: Int) {
+        _uiState.update { it.copy(colorConfig = it.colorConfig.copy(staticColorIndex = index)) }
+    }
+
+    fun updateColorIntervalSec(seconds: Int) {
+        _uiState.update { it.copy(colorConfig = it.colorConfig.copy(colorIntervalSec = seconds)) }
+    }
+
     fun updateRgb(r: Int, g: Int, b: Int) {
         // FIX: the ESP32 firmware only applies r/g/b when colorMode == 3 (Custom RGB).
         // Picking a color/slider without switching mode meant the picked color was sent
@@ -620,7 +822,8 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.value.activeHost,
                 _uiState.value.colorConfig,
                 _uiState.value.username,
-                _uiState.value.passwordInput
+                _uiState.value.passwordInput,
+                _uiState.value.selectedModel
             )
         }
     }
@@ -742,6 +945,12 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.value.passwordInput
             )
         }
+    }
+
+    fun toggleHourlyChime() {
+        val newEnabled = !_uiState.value.hourlyChime.enabled
+        _uiState.update { it.copy(hourlyChime = it.hourlyChime.copy(enabled = newEnabled)) }
+        saveHourlyChime()
     }
 
     fun saveToneRange(
@@ -1040,7 +1249,8 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.value.activeHost,
                 _uiState.value.colorPlaylist,
                 _uiState.value.username,
-                _uiState.value.passwordInput
+                _uiState.value.passwordInput,
+                _uiState.value.selectedModel
             )
         }
     }
