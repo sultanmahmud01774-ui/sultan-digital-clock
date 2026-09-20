@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.ClockModel
 import com.example.data.model.ColorConfig
 import com.example.data.model.ColorPreset
 import com.example.ui.components.ActionFeedbackBanner
@@ -343,6 +344,166 @@ fun ControlsScreen(
             }
 
             Spacer(modifier = Modifier.height(20.dp))
+        }
+
+        // --- ESP8266 BUZZER & TONE CONTROLS (ESP8266 ONLY) ---
+        if (uiState.selectedModel == ClockModel.ESP8266) {
+            item {
+                SectionHeader(
+                    title = "HOURLY BUZZER & ACTIVE HOURS",
+                    icon = Icons.Default.VolumeUp,
+                    accentColor = AmberOrange
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                GlassCard {
+                    // Hourly Beep Toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Hourly Beep (ঘণ্টার বিপ)", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                            Text("Buzzer beeps every hour on the clock", fontSize = 11.sp, color = TextSecondary)
+                        }
+                        Switch(
+                            checked = uiState.dashboard.hourlyBeepEnabled,
+                            onCheckedChange = { viewModel.saveHourlyBeep(it) },
+                            colors = SwitchDefaults.colors(checkedThumbColor = AmberOrange, checkedTrackColor = AmberOrange.copy(alpha = 0.3f))
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Buzzer Test Beep Button
+                    Button(
+                        onClick = { viewModel.testBuzzerBeep() },
+                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = AmberOrange, contentColor = Color(0xFF241500)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.MusicNote, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Test Buzzer (৩ বার বিপ পরীক্ষা)", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider(color = CardBorder)
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Tone Active Range
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Tone Active Time Range", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                            Text("Limit beeps only between specific daytime hours", fontSize = 11.sp, color = TextSecondary)
+                        }
+                        Switch(
+                            checked = uiState.hourlyChime.toneRangeEnabled,
+                            onCheckedChange = {
+                                viewModel.saveToneRange(it, uiState.hourlyChime.toneStartHour, uiState.hourlyChime.toneEndHour)
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = CyanAccent, checkedTrackColor = CyanAccent.copy(alpha = 0.3f))
+                        )
+                    }
+
+                    if (uiState.hourlyChime.toneRangeEnabled) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Start Hour (0-23):", fontSize = 11.sp, color = TextSecondary)
+                                OutlinedTextField(
+                                    value = uiState.hourlyChime.toneStartHour.toString(),
+                                    onValueChange = {
+                                        it.toIntOrNull()?.let { h ->
+                                            viewModel.saveToneRange(uiState.hourlyChime.toneRangeEnabled, h.coerceIn(0, 23), uiState.hourlyChime.toneEndHour)
+                                        }
+                                    },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("End Hour (0-23):", fontSize = 11.sp, color = TextSecondary)
+                                OutlinedTextField(
+                                    value = uiState.hourlyChime.toneEndHour.toString(),
+                                    onValueChange = {
+                                        it.toIntOrNull()?.let { h ->
+                                            viewModel.saveToneRange(uiState.hourlyChime.toneRangeEnabled, uiState.hourlyChime.toneStartHour, h.coerceIn(0, 23))
+                                        }
+                                    },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+
+            // Date Settings Section (ESP8266)
+            item {
+                SectionHeader(
+                    title = "DATE DISPLAY (তারিখ প্রদর্শন)",
+                    icon = Icons.Default.CalendarToday,
+                    accentColor = GoldPrimary
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                GlassCard {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("English Date Display", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                            Text("Show English date on digital clock", fontSize = 11.sp, color = TextSecondary)
+                        }
+                        Switch(
+                            checked = uiState.dateSettings.isDateEnabled,
+                            onCheckedChange = {
+                                viewModel.saveDateDisplaySettings(it, uiState.dateSettings.isBanglaDate)
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = GoldPrimary, checkedTrackColor = GoldPrimary.copy(alpha = 0.3f))
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Bangla Date Display (বাংলা তারিখ)", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                            Text("Show Bangla date on digital clock", fontSize = 11.sp, color = TextSecondary)
+                        }
+                        Switch(
+                            checked = uiState.dateSettings.isBanglaDate,
+                            onCheckedChange = {
+                                viewModel.saveDateDisplaySettings(uiState.dateSettings.isDateEnabled, it)
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = CyanAccent, checkedTrackColor = CyanAccent.copy(alpha = 0.3f))
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+            }
         }
 
         // --- DISPLAY SCHEDULE SECTION ---

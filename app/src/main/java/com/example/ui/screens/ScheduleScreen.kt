@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.ClockModel
 import com.example.data.model.HourlyChimeConfig
 import com.example.data.model.WeeklyPlaylistSlot
 import com.example.ui.components.ActionFeedbackBanner
@@ -101,6 +102,65 @@ fun ScheduleScreen(
                         contentDescription = null,
                         tint = EmeraldGreen
                     )
+                }
+            }
+
+            if (uiState.selectedModel == ClockModel.ESP8266) {
+                Spacer(modifier = Modifier.height(8.dp))
+                // ESP8266 Buzzer Test Quick Card
+                Surface(
+                    onClick = { viewModel.testBuzzerBeep() },
+                    shape = RoundedCornerShape(16.dp),
+                    color = CardBackground,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, AmberOrange.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .background(AmberOrange.copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.VolumeUp,
+                                    contentDescription = null,
+                                    tint = AmberOrange,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = "ESP8266 Hardware Buzzer Test",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    text = "৩ বার বিপ বাজিয়ে পরীক্ষা করুন (Test Tone)",
+                                    fontSize = 11.sp,
+                                    color = AmberOrange
+                                )
+                            }
+                        }
+
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = AmberOrange
+                        )
+                    }
                 }
             }
 

@@ -32,6 +32,8 @@ import com.example.data.model.ClockDashboardData
 import com.example.data.model.ColorConfig
 import com.example.data.model.ColorPreset
 import com.example.ui.theme.*
+import com.example.util.BengaliCalendarHelper
+import java.util.Calendar
 
 /**
  * Seven-segment bitmask mapping for 0-9 and special characters
@@ -81,10 +83,21 @@ fun VirtualLedClockMirror(
 ) {
     var viewMode by remember { mutableStateOf(MirrorViewMode.TIME) }
 
-    // Infinite animation for Rainbow, Fade, and Colon blinking
+    // 1-second pulse for Colon blinking (eliminates 60fps continuous recomposition)
+    val colonOn by produceState(initialValue = true) {
+        while (true) {
+            kotlinx.coroutines.delay(1000)
+            value = !value
+        }
+    }
+
+    val isAnimatedMode = colorConfig.mode == 1 || colorConfig.mode == 2 || colorConfig.mode == 4
+    val staticBaseColor = remember(colorConfig.red, colorConfig.green, colorConfig.blue) {
+        Color(colorConfig.red, colorConfig.green, colorConfig.blue)
+    }
+
+    // Smooth transitions for animated color modes
     val infiniteTransition = rememberInfiniteTransition(label = "LedClockAnim")
-    
-    // Rainbow hue rotation (0..360)
     val rainbowHue by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
@@ -95,7 +108,6 @@ fun VirtualLedClockMirror(
         label = "RainbowHue"
     )
 
-    // Smooth fade breathing alpha (0.4f .. 1f)
     val fadeAlpha by infiniteTransition.animateFloat(
         initialValue = 0.35f,
         targetValue = 1f,
@@ -106,28 +118,18 @@ fun VirtualLedClockMirror(
         label = "FadeAlpha"
     )
 
-    // Colon blink (1 sec cycle)
-    val colonOn by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 500, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "ColonBlink"
-    )
-
     // Determine primary segment color based on Clock's active color mode
     val activeBaseColor = when (colorConfig.mode) {
-        0 -> Color(colorConfig.red, colorConfig.green, colorConfig.blue) // Static / RGB
-        1 -> Color(colorConfig.red, colorConfig.green, colorConfig.blue).copy(alpha = fadeAlpha) // Smooth Fade
+        0 -> staticBaseColor // Static / RGB
+        1 -> staticBaseColor.copy(alpha = fadeAlpha) // Smooth Fade
         2 -> Color.hsv(rainbowHue, 0.85f, 1f) // Rainbow Wave
-        3 -> Color(colorConfig.red, colorConfig.green, colorConfig.blue) // Custom RGB
+        3 -> staticBaseColor // Custom RGB
         4 -> Color.hsv((rainbowHue + 180) % 360, 0.9f, 1f) // Sweep
         else -> NeonGold
     }
 
     val displayColor = if (dashboardData.isDisplayOn) activeBaseColor else Color(0xFF1E2430)
+    val cardAccentColor = if (dashboardData.isDisplayOn) staticBaseColor else Color(0xFF1E2430)
     val unlitColor = Color(0xFF131822) // Dim unlit segment background
 
     // Parse characters to show (4 chars: d0, d1, colon, d2, d3)
@@ -141,16 +143,35 @@ fun VirtualLedClockMirror(
                 listOf(h[0], h[1], m[0], m[1], true)
             }
             MirrorViewMode.ENGLISH_DATE -> {
-                // e.g. "2026-08-20" -> Day 20, Month 08 -> "20-08"
-                val parts = dashboardData.currentDateStr.split("-")
-                val day = parts.getOrNull(2) ?: "20"
-                val month = parts.getOrNull(1) ?: "08"
-                listOf(day[0], day.getOrElse(1) { '0' }, month[0], month.getOrElse(1) { '0' }, false)
+                // e.g. "2026-09-20" or "20/09"
+                val raw = dashboardData.currentDateStr.trim()
+                val (dStr, mStr) = if (raw.contains("-")) {
+                    val parts = raw.split("-")
+                    if (parts.size >= 3) {
+                        parts[2].padStart(2, '0') to parts[1].padStart(2, '0')
+                    } else {
+                        "20" to "09"
+                    }
+                } else if (raw.contains("/")) {
+                    val parts = raw.split("/")
+                    (parts.getOrNull(0)?.padStart(2, '0') ?: "20") to (parts.getOrNull(1)?.padStart(2, '0') ?: "09")
+                } else {
+                    val cal = Calendar.getInstance()
+                    String.format("%02d", cal.get(Calendar.DAY_OF_MONTH)) to String.format("%02d", cal.get(Calendar.MONTH) + 1)
+                }
+                listOf(dStr[0], dStr.getOrElse(1) { '0' }, mStr[0], mStr.getOrElse(1) { '0' }, false)
             }
             MirrorViewMode.BANGLA_DATE -> {
-                // e.g. "24/05"
-                val rawBangla = dashboardData.banglaDate?.filter { it.isDigit() || it == '/' } ?: "2405"
-                val digits = rawBangla.filter { it.isDigit() }.padEnd(4, '0')
+                // e.g. "5/6/1433" -> Day 05, Month 06 -> "0506"
+                val raw = dashboardData.banglaDate?.trim()
+                val digits = if (!raw.isNullOrBlank() && raw.contains("/")) {
+                    val parts = raw.split("/")
+                    val d = parts.getOrNull(0)?.toIntOrNull() ?: 5
+                    val m = parts.getOrNull(1)?.toIntOrNull() ?: 6
+                    String.format("%02d%02d", d, m)
+                } else {
+                    BengaliCalendarHelper.getBanglaDate().fourDigits
+                }
                 listOf(digits[0], digits[1], digits[2], digits[3], false)
             }
         }
@@ -163,13 +184,13 @@ fun VirtualLedClockMirror(
             .shadow(
                 elevation = if (dashboardData.isDisplayOn) 12.dp else 2.dp,
                 shape = RoundedCornerShape(24.dp),
-                spotColor = displayColor.copy(alpha = 0.5f)
+                spotColor = cardAccentColor.copy(alpha = 0.5f)
             )
             .border(
                 width = 1.2.dp,
                 brush = Brush.verticalGradient(
                     colors = listOf(
-                        displayColor.copy(alpha = if (dashboardData.isDisplayOn) 0.6f else 0.15f),
+                        cardAccentColor.copy(alpha = if (dashboardData.isDisplayOn) 0.6f else 0.15f),
                         CardBorder.copy(alpha = 0.3f)
                     )
                 ),
@@ -313,7 +334,7 @@ fun VirtualLedClockMirror(
 
                         // Colon (2 Dots, LEDs 14 & 15)
                         SevenSegmentColon(
-                            visible = (colonVisible as Boolean) && (colonOn > 0.4f),
+                            visible = (colonVisible as Boolean) && colonOn,
                             dotColor = displayColor,
                             unlitColor = unlitColor,
                             height = 92.dp
@@ -412,6 +433,48 @@ fun VirtualLedClockMirror(
                         label = "বাংলা",
                         selected = viewMode == MirrorViewMode.BANGLA_DATE,
                         onClick = { viewMode = MirrorViewMode.BANGLA_DATE }
+                    )
+                }
+            }
+
+            // Prominent Bengali Date Banner for mobile visibility
+            val bDate = remember(dashboardData.banglaDate) {
+                BengaliCalendarHelper.getBanglaDate()
+            }
+            val displayBnStr = if (!dashboardData.banglaDate.isNullOrBlank() && dashboardData.banglaDate != "null") {
+                "বাংলা: ${dashboardData.banglaDate} • ${bDate.fullDateBn}"
+            } else {
+                "বাংলা: ${bDate.shortDate} • ${bDate.fullDateBn}"
+            }
+
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = if (viewMode == MirrorViewMode.BANGLA_DATE) Color(0xFF132B1F) else Color(0xFF131A26),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (viewMode == MirrorViewMode.BANGLA_DATE) Color(0xFF2E7D32) else CardBorder
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CalendarMonth,
+                        contentDescription = null,
+                        tint = if (viewMode == MirrorViewMode.BANGLA_DATE) Color(0xFF81C784) else GoldPrimary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = displayBnStr,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (viewMode == MirrorViewMode.BANGLA_DATE) Color(0xFF81C784) else TextPrimary
                     )
                 }
             }

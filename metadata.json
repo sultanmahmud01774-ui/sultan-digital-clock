@@ -1,6 +1,6 @@
 {
   "name": "Sultan Digital Clock",
-  "description": "Native Android controller for ESP32 Sultan Digital Clock with live telemetry, color, alarms, DFPlayer, and settings management.",
+  "description": "Dual-module Android controller for Sultan Digital Clock supporting both ESP32 (DFPlayer, Azan, Sensors) and ESP8266 (Hourly Beep, Piezo Buzzer, D7 Light, Static IP Setup).",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

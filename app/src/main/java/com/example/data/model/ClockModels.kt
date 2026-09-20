@@ -8,6 +8,31 @@ enum class ConnectionStatus {
     ERROR
 }
 
+enum class ClockModel(
+    val id: String,
+    val title: String,
+    val shortName: String,
+    val description: String,
+    val defaultApSsid: String
+) {
+    ESP8266(
+        id = "esp8266",
+        title = "ESP8266 Clock Hub",
+        shortName = "ESP8266",
+        description = "Smart Clock: 192.168.4.1 -> 192.168.0.xxx Setup, Buzzer & D7 Light",
+        defaultApSsid = "SULTAN DIGITAL CLOCK"
+    ),
+    ESP32(
+        id = "esp32",
+        title = "ESP32 Clock Hub",
+        shortName = "ESP32",
+        description = "Dual-Core Edition: DFPlayer Audio, Azan System & Animations",
+        defaultApSsid = "Sultan_Clock_AP"
+    );
+
+    val displayName: String get() = title
+}
+
 data class ClockAlarmStatus(
     val hour: Int = 0,
     val minute: Int = 0,
@@ -51,6 +76,19 @@ data class ClockDashboardData(
     val ipAddress: String = "192.168.4.1",
     val connectionType: String = "Wi-Fi LAN",
     val firmwareVersion: String = "v5.0-ESP32",
+    val detectedModel: ClockModel = ClockModel.ESP32,
+    // ESP8266 specific properties
+    val hourlyBeepEnabled: Boolean = true,
+    val hourlyToneRangeEnabled: Boolean = false,
+    val hourlyToneStartHour: Int = 7,
+    val hourlyToneEndHour: Int = 22,
+    val enableEnglishDate: Boolean = true,
+    val enableBanglaDate: Boolean = true,
+    val autoDisplaySchedule: Boolean = false,
+    val displayOffHour: Int = 22,
+    val displayOffMinute: Int = 0,
+    val displayOnHour: Int = 4,
+    val displayOnMinute: Int = 0,
     val prayerTimes: PrayerTimes? = null,
     val azanWaqtEnabled: List<Boolean> = listOf(true, true, true, true, true),
     val azanTrack: List<Int> = listOf(1, 2, 3, 4, 5),
@@ -132,6 +170,9 @@ data class HourlyChimeConfig(
     val enabled: Boolean = true,
     val startHour: Int = 6,
     val endHour: Int = 22,
+    val toneRangeEnabled: Boolean = false,
+    val toneStartHour: Int = 6,
+    val toneEndHour: Int = 22,
     val mode: Int = 0, // 0: Fixed, 1: Random, 2: Sequential, 3: By Hour
     val fixedTrack: Int = 1,
     val poolTracks: List<Int> = listOf(1, 2, 3, 4, 5, 6, 7, 8),
@@ -179,7 +220,8 @@ data class ColorPlaylistStep(
     val green: Int = 100,
     val blue: Int = 50,
     val durationSec: Int = 10,
-    val speed: Int = 5
+    val speed: Int = 5,
+    val colorChangeSec: Int = 10
 )
 
 data class ColorPlaylistConfig(

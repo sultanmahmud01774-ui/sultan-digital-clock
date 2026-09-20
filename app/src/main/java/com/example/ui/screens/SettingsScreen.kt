@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.ClockModel
 import com.example.ui.components.ActionFeedbackBanner
 import com.example.ui.components.GlassCard
 import com.example.ui.components.ProfileBackupDialog
@@ -61,10 +62,103 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // --- DFPLAYER MP3 & TEST PLAYER ---
+        // --- HARDWARE MODULE PROFILE SELECTOR ---
         item {
             SectionHeader(
-                title = "DFPLAYER MP3 AUDIO",
+                title = "HARDWARE PROFILE / মডিউল মোড",
+                icon = Icons.Default.Memory,
+                accentColor = if (uiState.selectedModel == ClockModel.ESP8266) AmberOrange else CyanAccent
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            GlassCard(
+                borderColor = if (uiState.selectedModel == ClockModel.ESP8266) AmberOrange.copy(alpha = 0.5f) else CyanAccent.copy(alpha = 0.5f)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Active Hardware Profile",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Detected firmware: ${uiState.dashboard.firmwareVersion.ifEmpty { "Auto-detect on connect" }}",
+                            fontSize = 11.sp,
+                            color = TextSecondary
+                        )
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (uiState.selectedModel == ClockModel.ESP8266) AmberOrange.copy(alpha = 0.2f) else CyanAccent.copy(alpha = 0.2f),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (uiState.selectedModel == ClockModel.ESP8266) AmberOrange else CyanAccent
+                        )
+                    ) {
+                        Text(
+                            text = uiState.selectedModel.displayName,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (uiState.selectedModel == ClockModel.ESP8266) AmberOrange else CyanAccent,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val isEsp32 = uiState.selectedModel == ClockModel.ESP32
+                    OutlinedButton(
+                        onClick = { viewModel.setClockModel(ClockModel.ESP32) },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = if (isEsp32) CyanAccent.copy(alpha = 0.15f) else Color.Transparent,
+                            contentColor = if (isEsp32) CyanAccent else TextSecondary
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, if (isEsp32) CyanAccent else CardBorder),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.Memory, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("ESP32 Profile", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    val isEsp8266 = uiState.selectedModel == ClockModel.ESP8266
+                    OutlinedButton(
+                        onClick = { viewModel.setClockModel(ClockModel.ESP8266) },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = if (isEsp8266) AmberOrange.copy(alpha = 0.15f) else Color.Transparent,
+                            contentColor = if (isEsp8266) AmberOrange else TextSecondary
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, if (isEsp8266) AmberOrange else CardBorder),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.AccessTime, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("ESP8266 Profile", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+        }
+
+        // --- AUDIO CONTROLS (DFPLAYER MP3 AUDIO & HARDWARE BUZZER) ---
+        item {
+            SectionHeader(
+                title = "DFPLAYER MP3 AUDIO & SOUND",
                 icon = Icons.Default.Speaker,
                 accentColor = CyanAccent
             )
@@ -72,95 +166,130 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             GlassCard {
-                // Volume Slider
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Master Audio Volume", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text(
-                        text = "${uiState.dashboard.dfVolume} / 30",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = CyanAccent,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-
-                Slider(
-                    value = uiState.dashboard.dfVolume.toFloat(),
-                    onValueChange = { viewModel.updateDfVolume(it.toInt()) },
-                    valueRange = 0f..30f,
-                    colors = SliderDefaults.colors(
-                        thumbColor = CyanAccent,
-                        activeTrackColor = CyanAccent,
-                        inactiveTrackColor = CardBackgroundElevated
-                    )
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Track Test Player
-                Text("Test Play MicroSD Track:", fontSize = 12.sp, color = TextSecondary)
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = testTrackInput,
-                        onValueChange = { testTrackInput = it },
-                        label = { Text("Track #") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
-                    )
-
-                    Button(
-                        onClick = {
-                            testTrackInput.toIntOrNull()?.let { viewModel.testDfTrack(it) }
-                        },
+                if (uiState.selectedModel == ClockModel.ESP8266) {
+                    Row(
                         modifier = Modifier
-                            .height(52.dp)
-                            .testTag("test_track_btn"),
-                        colors = ButtonDefaults.buttonColors(containerColor = CyanAccent, contentColor = Color(0xFF00363D)),
-                        shape = RoundedCornerShape(12.dp)
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("PLAY TEST", fontWeight = FontWeight.Bold)
+                        Column {
+                            Text(
+                                text = "ESP8266 AI Elite Sound System",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = AmberOrange
+                            )
+                            Text(
+                                text = "DFPlayer Mini MP3 Audio & MicroSD Support",
+                                fontSize = 11.sp,
+                                color = TextSecondary
+                            )
+                        }
+                        Button(
+                            onClick = { viewModel.testBuzzerBeep() },
+                            colors = ButtonDefaults.buttonColors(containerColor = AmberOrange.copy(alpha = 0.2f), contentColor = AmberOrange),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.VolumeUp, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Buzzer Beep", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    HorizontalDivider(color = CardBorder)
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+                    // Volume Slider
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Master Audio Volume", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Text(
+                            text = "${uiState.dashboard.dfVolume} / 30",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CyanAccent,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+
+                    Slider(
+                        value = uiState.dashboard.dfVolume.toFloat(),
+                        onValueChange = { viewModel.updateDfVolume(it.toInt()) },
+                        valueRange = 0f..30f,
+                        colors = SliderDefaults.colors(
+                            thumbColor = CyanAccent,
+                            activeTrackColor = CyanAccent,
+                            inactiveTrackColor = CardBackgroundElevated
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Track Test Player
+                    Text("Test Play MicroSD Track:", fontSize = 12.sp, color = TextSecondary)
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = testTrackInput,
+                            onValueChange = { testTrackInput = it },
+                            label = { Text("Track #") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+
+                        Button(
+                            onClick = {
+                                testTrackInput.toIntOrNull()?.let { viewModel.testDfTrack(it) }
+                            },
+                            modifier = Modifier
+                                .height(52.dp)
+                                .testTag("test_track_btn"),
+                            colors = ButtonDefaults.buttonColors(containerColor = CyanAccent, contentColor = Color(0xFF00363D)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("PLAY TEST", fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = viewModel.getTrackDisplayName(testTrackInput.toIntOrNull() ?: 1),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = EmeraldGreen
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // SD Card Track Catalog Button
+                    OutlinedButton(
+                        onClick = { viewModel.openTrackManager(true) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = EmeraldGreen),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, EmeraldGreen.copy(alpha = 0.5f))
+                    ) {
+                        Icon(Icons.Default.LibraryMusic, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("SD Card Track Manager (কাস্টম ট্র্যাক নাম)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Text(
-                    text = viewModel.getTrackDisplayName(testTrackInput.toIntOrNull() ?: 1),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = EmeraldGreen
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // SD Card Track Catalog Button
-                OutlinedButton(
-                    onClick = { viewModel.openTrackManager(true) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = EmeraldGreen),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, EmeraldGreen.copy(alpha = 0.5f))
-                ) {
-                    Icon(Icons.Default.LibraryMusic, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("SD Card Track Manager (কাস্টম ট্র্যাক নাম)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
+                Spacer(modifier = Modifier.height(20.dp))
             }
-
-            Spacer(modifier = Modifier.height(20.dp))
-        }
 
         // --- DATE & REGIONAL SETTINGS ---
         item {
@@ -413,6 +542,61 @@ fun SettingsScreen(
                         shape = RoundedCornerShape(10.dp)
                     ) {
                         Text("Update", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                if (uiState.selectedModel == ClockModel.ESP8266) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(color = CardBorder)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text("ESP8266 Password & Wi-Fi Recovery Tools:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = AmberOrange)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Reset to default sultan88 button
+                    OutlinedButton(
+                        onClick = { viewModel.resetDefaultAdminPassword() },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = WarningOrange),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, WarningOrange.copy(alpha = 0.6f)),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.LockReset, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Reset Admin Password to sultan88", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Show Wi-Fi password button & view
+                    OutlinedButton(
+                        onClick = { viewModel.fetchWifiPassword() },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = CyanAccent),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, CyanAccent.copy(alpha = 0.6f)),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Show Stored Wi-Fi Password from Clock", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    if (uiState.wifiPasswordDisplay != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = CardBackgroundElevated,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "Wi-Fi Password: ${uiState.wifiPasswordDisplay}",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary,
+                                fontFamily = FontFamily.Monospace,
+                                modifier = Modifier.padding(10.dp)
+                            )
+                        }
                     }
                 }
             }

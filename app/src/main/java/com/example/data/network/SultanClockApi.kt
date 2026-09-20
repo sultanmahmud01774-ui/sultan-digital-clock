@@ -21,8 +21,8 @@ open class Esp32Api {
 
     companion object {
         private const val TAG = "Esp32Api"
-        private const val DEFAULT_TIMEOUT_SEC = 5L
-        private const val LONG_TIMEOUT_SEC = 15L
+        private const val DEFAULT_TIMEOUT_SEC = 3L
+        private const val LONG_TIMEOUT_SEC = 10L
     }
 
     private val baseClient = OkHttpClient.Builder()
@@ -130,7 +130,7 @@ open class Esp32Api {
         host: String,
         user: String = "admin",
         pass: String = ""
-    ): ClockDashboardData = withContext(Dispatchers.IO) {
+    ): ClockDashboardData? = withContext(Dispatchers.IO) {
         val client = getClientWithAuth(user, pass)
 
         // 1. Try /api/status first (if firmware provides JSON)
@@ -167,14 +167,14 @@ open class Esp32Api {
                     return@withContext parseRootHtml(html, host)
                 } else if (response.code == 401) {
                     Log.w(TAG, "getStatus 401 Unauthorized for $host")
-                    return@withContext ClockDashboardData(ipAddress = host)
+                    return@withContext null
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "getStatus error: ${e.message}")
+            Log.w(TAG, "getStatus unreachable or offline: ${e.message}")
         }
 
-        ClockDashboardData(ipAddress = host)
+        null
     }
 
     /**
@@ -352,9 +352,21 @@ open class Esp32Api {
             }
 
             // 1. Live Time & Date
-            val rawTime = extractRegex("<div[^>]*class=['\"][^'\"]*time-main[^'\"]*['\"][^>]*>([^<]+)</div>", "12:00:00")
+            // Strip any inner html tags (such as <span ...> AM</span>) from time-main
+            val rawTimeMatch = Regex("<div[^>]*class=['\"][^'\"]*time-main[^'\"]*['\"][^>]*>(.*?)</div>", RegexOption.IGNORE_CASE).find(html)
+            val rawTime = rawTimeMatch?.groups?.get(1)?.value?.replace(Regex("<[^>]*>"), " ")?.trim() ?: "12:00:00"
             val rawDate = extractRegex("<div[^>]*class=['\"][^'\"]*time-date[^'\"]*['\"][^>]*>([^<]+)</div>", "")
             val bangla = extractRegex("বাংলা:\\s*([0-9/]+|[^<\\s]+)").takeIf { it.isNotBlank() }
+
+            // Detect Model
+            val isEsp8266 = html.contains("SULTAN CLOCK (FIXED VERSION)", ignoreCase = true) ||
+                    html.contains("hourlybeep_range", ignoreCase = true) ||
+                    html.contains("ESP8266", ignoreCase = true) ||
+                    html.contains("Masjid Edition", ignoreCase = true) ||
+                    (!html.contains("DFPlayer", ignoreCase = true) && !html.contains("prayerstatus", ignoreCase = true) && html.contains("sultan", ignoreCase = true))
+
+            val detectedModel = if (isEsp8266) ClockModel.ESP8266 else ClockModel.ESP32
+            val fwVersion = if (isEsp8266) "v3.5-ESP8266" else "v5.0-ESP32"
 
             // 2. Hardware Switch States
             val isDisplayOn = extractRegex("id=['\"]displaystatus['\"][^>]*class=['\"]status-([a-zA-Z]+)['\"]", "on").equals("on", ignoreCase = true)
@@ -363,7 +375,7 @@ open class Esp32Api {
             val tempVal = extractRegex("([0-9.]+)\\s*&deg;C", "28.5").toFloatOrNull() ?: 28.5f
             val isPrayerAlarmOn = extractRegex("id=['\"]prayerstatus['\"][^>]*class=['\"]status-([a-zA-Z]+)['\"]", "on").equals("on", ignoreCase = true)
 
-            // 3. Prayer Times
+            // 3. Prayer Times (ESP32)
             val fajrTime = extractRegex("Fajr<br>([0-9:]+)", "04:12")
             val sunriseTime = extractRegex("Sunrise<br>([0-9:]+)", "05:28")
             val dhuhrTime = extractRegex("Dhuhr<br>([0-9:]+)", "12:05")
@@ -380,10 +392,20 @@ open class Esp32Api {
                 isAzanAlarmEnabled = isPrayerAlarmOn
             )
 
-            // 4. DFPlayer & Audio
-            val dfConnected = html.contains("DFPlayer Mini ready", ignoreCase = true)
+            // 4. DFPlayer & Audio (ESP32 & ESP8266) & Buzzer Hourly Beep
+            val dfConnected = html.contains("DFPlayer Mini ready", ignoreCase = true) ||
+                    html.contains("DFPLAYER", ignoreCase = true) ||
+                    html.contains("dfvol", ignoreCase = true)
             val dfVol = extractRegex("id=['\"]dfvol['\"][^>]*value=['\"]([0-9]+)['\"]", "22").toIntOrNull() ?: 22
-            val hourlyChimeEnabled = hasChecked("hourlybeep2") || hasChecked("hourlybeep")
+            val hourlyChimeEnabled = hasChecked("hourlybeep_range") || hasChecked("hourlybeep2") || hasChecked("hourlybeep")
+            val hourlyToneRangeEnabled = hasChecked("tonerangeen")
+            val toneStartStr = extractRegex("id=['\"]tonestarthr['\"][^>]*value=['\"]([0-9:]+)['\"]", "07:00")
+            val toneEndStr = extractRegex("id=['\"]toneendhr['\"][^>]*value=['\"]([0-9:]+)['\"]", "22:00")
+            val toneStartHour = toneStartStr.split(":").getOrNull(0)?.toIntOrNull() ?: 7
+            val toneEndHour = toneEndStr.split(":").getOrNull(0)?.toIntOrNull() ?: 22
+            val enableEngDate = hasChecked("showEnglishDate")
+            val enableBanDate = hasChecked("showBanglaDate")
+
             val hourlyChimeMode = extractRegex("value=['\"]([0-3])['\"][^>]*name=['\"]hmode['\"][^>]*checked|name=['\"]hmode['\"][^>]*value=['\"]([0-3])['\"][^>]*checked", "0").toIntOrNull() ?: 0
 
             // 5. Brightness & LDR Telemetry
@@ -452,7 +474,14 @@ open class Esp32Api {
                 wifiSsid = wifiSsid,
                 ipAddress = ipAddress,
                 connectionType = if (isApMode) "Clock Hotspot (AP)" else if (isWifiConn) "Wi-Fi LAN" else "Disconnected",
-                firmwareVersion = "v5.0-ESP32",
+                firmwareVersion = fwVersion,
+                detectedModel = detectedModel,
+                hourlyBeepEnabled = hourlyChimeEnabled,
+                hourlyToneRangeEnabled = hourlyToneRangeEnabled,
+                hourlyToneStartHour = toneStartHour,
+                hourlyToneEndHour = toneEndHour,
+                enableEnglishDate = enableEngDate,
+                enableBanglaDate = enableBanDate,
                 prayerTimes = prayerTimes,
                 azanTrack = azanTracks,
                 alarms = alarms
@@ -470,7 +499,7 @@ open class Esp32Api {
         host: String,
         user: String = "admin",
         pass: String = ""
-    ): ClockDashboardData = getStatus(host, user, pass)
+    ): ClockDashboardData? = getStatus(host, user, pass)
 
     /**
      * Helper to send GET command to ESP32 with body-aware success detection
@@ -504,19 +533,29 @@ open class Esp32Api {
                 val responseBody = response.body?.string()?.trim() ?: ""
                 when {
                     response.code == 401 -> ActionResponse(false, "Authentication failed (401)")
-                    !response.isSuccessful -> ActionResponse(false, "ESP32 returned HTTP ${response.code}", responseBody)
-                    responseBody == "OK" || responseBody == "ON" || responseBody == "OFF" ->
-                        ActionResponse(true, responseBody, responseBody)
+                    !response.isSuccessful -> ActionResponse(false, "Clock returned HTTP ${response.code}", responseBody)
+                    // Robust JSON error checking
+                    responseBody.startsWith("{") && responseBody.contains("\"error\":true", ignoreCase = true) ->
+                        ActionResponse(false, responseBody.ifBlank { "Command rejected by clock" }, responseBody)
+                    // Brief explicit error message from MCU
+                    responseBody.length in 1..50 && (responseBody.startsWith("ERROR", ignoreCase = true) || responseBody.startsWith("FAIL", ignoreCase = true)) ->
+                        ActionResponse(false, responseBody, responseBody)
                     responseBody == "CONFLICT" ->
                         ActionResponse(true, "Saved, but Alarm 1 and Alarm 2 are set to the same time — only one will ring", responseBody)
                     else ->
-                        // Firmware returns HTTP 200 with error message body on validation failures
-                        ActionResponse(false, responseBody, responseBody)
+                        // Robust HTTP 200 parsing: If HTTP status is 200, it is considered a success even if returning HTML or simple text
+                        ActionResponse(true, if (responseBody.isNotBlank()) responseBody else "Command executed successfully", responseBody)
                 }
             }
+        } catch (e: java.net.SocketTimeoutException) {
+            Log.w(TAG, "sendGet timed out on $endpoint connecting to $host: ${e.message}")
+            ActionResponse(false, "Clock connection timed out at $host. Please ensure you are connected to the clock's Wi-Fi network.")
+        } catch (e: java.io.IOException) {
+            Log.w(TAG, "sendGet I/O unreachable on $endpoint to $host: ${e.message}")
+            ActionResponse(false, "Clock offline or unreachable at $host (${e.javaClass.simpleName})")
         } catch (e: Exception) {
-            Log.e(TAG, "sendGet failed on $endpoint", e)
-            ActionResponse(false, e.localizedMessage ?: "Failed to reach ESP32")
+            Log.w(TAG, "sendGet error on $endpoint: ${e.message}")
+            ActionResponse(false, e.localizedMessage ?: "Failed to reach Clock")
         }
     }
 
@@ -574,12 +613,19 @@ open class Esp32Api {
     ): ActionResponse {
         val params = mapOf(
             "eng" to if (config.isDateEnabled) "1" else "0",
-            "bangla" to if (config.isBanglaDate) "1" else "0"
+            "english" to if (config.isDateEnabled) "1" else "0",
+            "showEnglishDate" to if (config.isDateEnabled) "1" else "0",
+            "bangla" to if (config.isBanglaDate) "1" else "0",
+            "showBanglaDate" to if (config.isBanglaDate) "1" else "0"
         )
-        return sendGet(host, "/savedatesettings", params, user, pass)
+        val res = sendGet(host, "/savedatesettings", params, user, pass)
+        if (!res.isSuccess) {
+            return sendGet(host, "/savedate", params, user, pass)
+        }
+        return res
     }
 
-    // 5. Alarm Settings (TWO separate calls, one per alarm, with i,h,m,e)
+    // 5. Alarm Settings (TWO separate calls, one per alarm, with i,h,m,e,t)
     suspend fun saveAlarm(
         host: String,
         config: AlarmConfig,
@@ -591,7 +637,8 @@ open class Esp32Api {
                 "i" to "0",
                 "h" to config.alarm1Hour.toString(),
                 "m" to config.alarm1Minute.toString(),
-                "e" to if (config.alarm1Enabled) "1" else "0"
+                "e" to if (config.alarm1Enabled) "1" else "0",
+                "t" to config.alarm1Track.toString()
             ), user, pass
         )
         if (!r1.isSuccess) return r1
@@ -600,7 +647,29 @@ open class Esp32Api {
                 "i" to "1",
                 "h" to config.alarm2Hour.toString(),
                 "m" to config.alarm2Minute.toString(),
-                "e" to if (config.alarm2Enabled) "1" else "0"
+                "e" to if (config.alarm2Enabled) "1" else "0",
+                "t" to config.alarm2Track.toString()
+            ), user, pass
+        )
+    }
+
+    suspend fun saveSingleAlarm(
+        host: String,
+        index: Int,
+        hour: Int,
+        minute: Int,
+        enabled: Boolean,
+        toneIndex: Int,
+        user: String,
+        pass: String
+    ): ActionResponse {
+        return sendGet(
+            host, "/savealarm", mapOf(
+                "i" to index.toString(),
+                "h" to hour.toString(),
+                "m" to minute.toString(),
+                "e" to if (enabled) "1" else "0",
+                "t" to toneIndex.toString()
             ), user, pass
         )
     }
@@ -621,13 +690,14 @@ open class Esp32Api {
         return sendGet(host, "/savebright", params, user, pass)
     }
 
-    // 7. Color Control
-    suspend fun saveColor(
+    // 7. Color Control - Strictly separated for ESP8266 vs ESP32
+    suspend fun saveColorEsp8266(
         host: String,
         config: ColorConfig,
         user: String,
         pass: String
     ): ActionResponse {
+        // ESP8266 firmware accepts strictly short codes: m, sc, ci, r, g, b, spd
         val params = mapOf(
             "m" to config.mode.toString(),
             "sc" to config.staticColorIndex.toString(),
@@ -635,9 +705,41 @@ open class Esp32Api {
             "r" to config.red.toString(),
             "g" to config.green.toString(),
             "b" to config.blue.toString(),
-            "spd" to config.animSpeed.toString()
+            "spd" to config.animSpeed.coerceIn(1, 10).toString()
         )
         return sendGet(host, "/savecolor", params, user, pass)
+    }
+
+    suspend fun saveColorEsp32(
+        host: String,
+        config: ColorConfig,
+        user: String,
+        pass: String
+    ): ActionResponse {
+        val params = mapOf(
+            "mode" to config.mode.toString(),
+            "sc" to config.staticColorIndex.toString(),
+            "interval" to config.colorIntervalSec.toString(),
+            "r" to config.red.toString(),
+            "g" to config.green.toString(),
+            "b" to config.blue.toString(),
+            "speed" to config.animSpeed.coerceIn(1, 10).toString()
+        )
+        return sendGet(host, "/savecolor", params, user, pass)
+    }
+
+    suspend fun saveColor(
+        host: String,
+        config: ColorConfig,
+        user: String,
+        pass: String,
+        model: ClockModel = ClockModel.ESP8266
+    ): ActionResponse {
+        return if (model == ClockModel.ESP8266) {
+            saveColorEsp8266(host, config, user, pass)
+        } else {
+            saveColorEsp32(host, config, user, pass)
+        }
     }
 
     // 8. Display Schedule
@@ -796,28 +898,92 @@ open class Esp32Api {
         return sendGet(host, "/saveweeklyplaylist", params, user, pass)
     }
 
-    // 13. Color Playlist
-    suspend fun saveColorPlaylist(
+    // 13. Color Playlist - Strictly separated for ESP8266 vs ESP32
+    suspend fun saveColorPlaylistEsp8266(
         host: String,
         config: ColorPlaylistConfig,
         user: String,
         pass: String
     ): ActionResponse {
-        val params = mutableMapOf("en" to "1", "cnt" to config.steps.size.coerceAtMost(5).toString())
-        config.steps.take(5).forEachIndexed { i, step ->
+        val count = config.steps.size.coerceIn(1, 8)
+        val params = mutableMapOf(
+            "en" to if (config.enabled) "1" else "0",
+            "enabled" to if (config.enabled) "1" else "0",
+            "cnt" to count.toString(),
+            "count" to count.toString()
+        )
+        config.steps.take(count).forEachIndexed { i, step ->
             params["m$i"] = step.mode.toString()
+            params["mode$i"] = step.mode.toString()
             params["ci$i"] = step.colorIndex.toString()
+            params["color$i"] = step.colorIndex.toString()
             params["r$i"] = step.red.toString()
             params["g$i"] = step.green.toString()
             params["b$i"] = step.blue.toString()
             params["d$i"] = step.durationSec.toString()
+            params["duration$i"] = step.durationSec.toString()
             params["spd$i"] = step.speed.coerceIn(1, 10).toString()
+            params["speed$i"] = step.speed.coerceIn(1, 10).toString()
+            params["cc$i"] = step.colorChangeSec.coerceIn(1, step.durationSec).toString()
         }
         return sendGet(host, "/saveplaylist", params, user, pass)
     }
 
-    suspend fun toggleColorPlaylist(host: String, user: String, pass: String): ActionResponse {
-        return sendGet(host, "/toggleplaylist", emptyMap(), user, pass)
+    suspend fun saveColorPlaylistEsp32(
+        host: String,
+        config: ColorPlaylistConfig,
+        user: String,
+        pass: String
+    ): ActionResponse {
+        val count = config.steps.size.coerceIn(1, 8)
+        val params = mutableMapOf(
+            "en" to if (config.enabled) "1" else "0",
+            "enabled" to if (config.enabled) "1" else "0",
+            "count" to count.toString(),
+            "cnt" to count.toString()
+        )
+        config.steps.take(count).forEachIndexed { i, step ->
+            params["mode$i"] = step.mode.toString()
+            params["m$i"] = step.mode.toString()
+            params["color$i"] = step.colorIndex.toString()
+            params["ci$i"] = step.colorIndex.toString()
+            params["r$i"] = step.red.toString()
+            params["g$i"] = step.green.toString()
+            params["b$i"] = step.blue.toString()
+            params["speed$i"] = step.speed.coerceIn(1, 10).toString()
+            params["spd$i"] = step.speed.coerceIn(1, 10).toString()
+            params["duration$i"] = step.durationSec.toString()
+            params["d$i"] = step.durationSec.toString()
+        }
+        return sendGet(host, "/saveplaylist", params, user, pass)
+    }
+
+    suspend fun saveColorPlaylist(
+        host: String,
+        config: ColorPlaylistConfig,
+        user: String,
+        pass: String,
+        model: ClockModel = ClockModel.ESP8266
+    ): ActionResponse {
+        return if (model == ClockModel.ESP8266) {
+            saveColorPlaylistEsp8266(host, config, user, pass)
+        } else {
+            saveColorPlaylistEsp32(host, config, user, pass)
+        }
+    }
+
+    suspend fun toggleColorPlaylist(host: String, user: String, pass: String, enabled: Boolean? = null): ActionResponse {
+        val params = mutableMapOf<String, String>()
+        if (enabled != null) {
+            params["en"] = if (enabled) "1" else "0"
+            params["enabled"] = if (enabled) "1" else "0"
+        }
+        val res = sendGet(host, "/toggleplaylist", params, user, pass)
+        return if (!res.isSuccess && enabled != null) {
+            sendGet(host, "/saveplaylist", params, user, pass)
+        } else {
+            res
+        }
     }
 
     // 14. Wi-Fi Scan & Configuration
@@ -903,6 +1069,49 @@ open class Esp32Api {
         return sendGet(host, "/changepassword", params, user, currentPass)
     }
 
+    // 15b. ESP8266 Specific Utilities (Buzzer Test, Default Password Reset, Date Display)
+    suspend fun testTone(host: String, idx: Int = 0, user: String, pass: String): ActionResponse {
+        val params = mapOf("idx" to idx.toString())
+        return sendGet(host, "/testtone", params, user, pass)
+    }
+
+    suspend fun saveTone(host: String, mode: Int, idx: Int, user: String, pass: String): ActionResponse {
+        val params = mapOf(
+            "mode" to mode.toString(),
+            "idx" to idx.toString()
+        )
+        return sendGet(host, "/savetone", params, user, pass)
+    }
+
+    suspend fun resetDefaultPassword(host: String, user: String, pass: String): ActionResponse {
+        return sendGet(host, "/resetdefaultpass", emptyMap(), user, pass)
+    }
+
+    suspend fun showWifiPassword(host: String, user: String, pass: String): ActionResponse {
+        return sendGet(host, "/showwifipass", emptyMap(), user, pass)
+    }
+
+    suspend fun saveDateDisplaySettings(
+        host: String,
+        englishDate: Boolean,
+        banglaDate: Boolean,
+        user: String,
+        pass: String
+    ): ActionResponse {
+        val params = mapOf(
+            "eng" to if (englishDate) "1" else "0",
+            "english" to if (englishDate) "1" else "0",
+            "showEnglishDate" to if (englishDate) "1" else "0",
+            "bangla" to if (banglaDate) "1" else "0",
+            "showBanglaDate" to if (banglaDate) "1" else "0"
+        )
+        val res = sendGet(host, "/savedatesettings", params, user, pass)
+        if (!res.isSuccess) {
+            return sendGet(host, "/savedate", params, user, pass)
+        }
+        return res
+    }
+
     // 16. OTA Firmware Update
     suspend fun uploadOtaFirmware(
         host: String,
@@ -942,7 +1151,7 @@ open class Esp32Api {
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "OTA Upload error: ${e.message}")
+            Log.w(TAG, "OTA Upload error: ${e.message}")
             ActionResponse(false, e.localizedMessage ?: "OTA upload failed. Please try again.")
         }
     }

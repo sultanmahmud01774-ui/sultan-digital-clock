@@ -2,6 +2,7 @@ package com.example.data.storage
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.example.data.model.ClockModel
 
 class DevicePreferences(context: Context) {
     private val prefs: SharedPreferences =
@@ -10,17 +11,31 @@ class DevicePreferences(context: Context) {
     companion object {
         private const val PREFS_NAME = "sultan_clock_prefs"
         private const val KEY_IP = "key_clock_ip"
+        private const val KEY_ESP8266_IP = "key_esp8266_ip"
+        private const val KEY_ESP32_IP = "key_esp32_ip"
+        private const val KEY_ESP8266_STATIC_IP = "key_esp8266_static_ip"
+        private const val KEY_ESP8266_GATEWAY = "key_esp8266_gateway"
+        private const val KEY_ESP8266_SUBNET = "key_esp8266_subnet"
+        private const val KEY_ESP8266_ROUTER_SSID = "key_esp8266_router_ssid"
+        private const val KEY_ESP8266_USE_STATIC = "key_esp8266_use_static"
+
         private const val KEY_USERNAME = "key_username"
         private const val KEY_PASSWORD = "key_password"
         private const val KEY_REMEMBER_PASS = "key_remember_pass"
         private const val KEY_AUTO_CONNECT = "key_auto_connect"
         private const val KEY_SAVED_IPS = "key_saved_ips"
         private const val KEY_LAST_CONN_TYPE = "key_last_conn_type"
+        private const val KEY_CLOCK_MODEL = "key_clock_model"
 
         const val DEFAULT_MDNS_HOST = "sultanclock.local"
         const val DEFAULT_AP_IP = "192.168.4.1"
+        const val DEFAULT_ESP8266_STATIC_IP = "192.168.0.108"
+        const val DEFAULT_ESP8266_GATEWAY = "192.168.0.1"
+        const val DEFAULT_ESP8266_SUBNET = "255.255.255.0"
         const val DEFAULT_ADMIN_USER = "admin"
         const val DEFAULT_ADMIN_PASS = "sultan88"
+        const val DEFAULT_ESP32_AP_SSID = "Sultan_Clock_AP"
+        const val DEFAULT_ESP8266_AP_SSID = "SULTAN DIGITAL CLOCK"
 
         const val KEY_TRACK_NAMES = "key_track_names_json"
         const val KEY_BACKUP_PROFILES = "key_backup_profiles_json"
@@ -49,9 +64,53 @@ class DevicePreferences(context: Context) {
         )
     }
 
+    var esp8266Ip: String
+        get() = prefs.getString(KEY_ESP8266_IP, DEFAULT_AP_IP) ?: DEFAULT_AP_IP
+        set(value) = prefs.edit().putString(KEY_ESP8266_IP, value.trim()).apply()
+
+    var esp32Ip: String
+        get() = prefs.getString(KEY_ESP32_IP, DEFAULT_MDNS_HOST) ?: DEFAULT_MDNS_HOST
+        set(value) = prefs.edit().putString(KEY_ESP32_IP, value.trim()).apply()
+
+    var esp8266StaticIp: String
+        get() = prefs.getString(KEY_ESP8266_STATIC_IP, DEFAULT_ESP8266_STATIC_IP) ?: DEFAULT_ESP8266_STATIC_IP
+        set(value) = prefs.edit().putString(KEY_ESP8266_STATIC_IP, value.trim()).apply()
+
+    var esp8266Gateway: String
+        get() = prefs.getString(KEY_ESP8266_GATEWAY, DEFAULT_ESP8266_GATEWAY) ?: DEFAULT_ESP8266_GATEWAY
+        set(value) = prefs.edit().putString(KEY_ESP8266_GATEWAY, value.trim()).apply()
+
+    var esp8266Subnet: String
+        get() = prefs.getString(KEY_ESP8266_SUBNET, DEFAULT_ESP8266_SUBNET) ?: DEFAULT_ESP8266_SUBNET
+        set(value) = prefs.edit().putString(KEY_ESP8266_SUBNET, value.trim()).apply()
+
+    var esp8266RouterSsid: String
+        get() = prefs.getString(KEY_ESP8266_ROUTER_SSID, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_ESP8266_ROUTER_SSID, value.trim()).apply()
+
+    var esp8266UseStaticIp: Boolean
+        get() = prefs.getBoolean(KEY_ESP8266_USE_STATIC, true)
+        set(value) = prefs.edit().putBoolean(KEY_ESP8266_USE_STATIC, value).apply()
+
+    fun getIpForModel(model: ClockModel): String {
+        return when (model) {
+            ClockModel.ESP8266 -> esp8266Ip
+            ClockModel.ESP32 -> esp32Ip
+        }
+    }
+
+    fun setIpForModel(model: ClockModel, ip: String) {
+        val cleanIp = ip.trim()
+        when (model) {
+            ClockModel.ESP8266 -> esp8266Ip = cleanIp
+            ClockModel.ESP32 -> esp32Ip = cleanIp
+        }
+        prefs.edit().putString(KEY_IP, cleanIp).apply()
+    }
+
     var ipAddress: String
-        get() = prefs.getString(KEY_IP, DEFAULT_MDNS_HOST) ?: DEFAULT_MDNS_HOST
-        set(value) = prefs.edit().putString(KEY_IP, value.trim()).apply()
+        get() = getIpForModel(clockModel)
+        set(value) = setIpForModel(clockModel, value)
 
     var username: String
         get() = prefs.getString(KEY_USERNAME, DEFAULT_ADMIN_USER) ?: DEFAULT_ADMIN_USER
@@ -72,6 +131,17 @@ class DevicePreferences(context: Context) {
     var lastConnectionType: String
         get() = prefs.getString(KEY_LAST_CONN_TYPE, "mDNS") ?: "mDNS"
         set(value) = prefs.edit().putString(KEY_LAST_CONN_TYPE, value).apply()
+
+    var clockModel: ClockModel
+        get() {
+            val saved = prefs.getString(KEY_CLOCK_MODEL, ClockModel.ESP8266.name)
+            return try {
+                ClockModel.valueOf(saved ?: ClockModel.ESP8266.name)
+            } catch (e: Exception) {
+                ClockModel.ESP8266
+            }
+        }
+        set(value) = prefs.edit().putString(KEY_CLOCK_MODEL, value.name).apply()
 
     fun getSavedIps(): Set<String> {
         val defaultSet = setOf(DEFAULT_MDNS_HOST, DEFAULT_AP_IP, "192.168.1.120")
