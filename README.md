@@ -1,36 +1,52 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Sultan Digital Clock — Android Controller (ESP8266 Edition)
 
-# Run and deploy your AI Studio app
+This source package is prepared specifically against the supplied `Sultan_Digital_Clock_v8_ColorChangeSec.ino` ESP8266 firmware.
 
-This contains everything you need to run your app locally.
+## Real ESP8266 controls wired into the app
 
-View your app in AI Studio: https://ai.studio/apps/3d51afe5-8ca0-4d4e-9b1e-238975e60828
+- IP / AP connection (`192.168.4.1` supported)
+- Connection/authentication with ESP8266 `/checkauth`
+- Live status from the actual root Web UI HTML (no ESP32-only `/api/status` dependency)
+- Phone time sync
+- NTP sync
+- Display ON/OFF
+- D7 light ON/OFF
+- Display schedule
+- English/Bangla date settings
+- 12/24-hour mode
+- Colon blink
+- Show date
+- Hourly tone enable
+- Tone active time range
+- Fixed / Random / Sequential tone mode
+- Tone selection and real tone test
+- Alarm 1 / Alarm 2 and ringtone selection
+- Manual brightness
+- Auto LDR brightness
+- LDR low/high calibration
+- Static / Smooth Fade / Rainbow / Custom RGB / Sweep Random
+- 12-color palette + custom RGB controls
+- Color interval and animation speed
+- 8-step color playlist with duration, speed and color-change interval
+- Wi-Fi scan
+- Wi-Fi client configuration
+- Static IP configuration
+- Web password change
+- OTA `.bin` upload through the firmware's `/update` endpoint
+- Hardware Web UI compatibility view for complete firmware-native controls
 
-## Run Locally
+## Source verification
 
-**Prerequisites:**  [Android Studio](https://developer.android.com/studio)
+See `ESP8266_API_CONTRACT.md` for the exact route/parameter contract extracted from the supplied firmware.
 
+Run:
 
-1. Open Android Studio
-2. Select **Open** and choose the directory containing this project
-3. Allow Android Studio to fix any incompatibilities as it imports the project.
-4. Create a file named `.env` in the project directory and set `GEMINI_API_KEY` in that file to your Gemini API key (see `.env.example` for an example)
-5. Remove this line from the app's `build.gradle.kts` file: `signingConfig = signingConfigs.getByName("debugConfig")`
-6. Run the app on an emulator or physical device
-7. If you have already published your app in AI Studio, please [request upload key reset](https://support.google.com/googleplay/android-developer/answer/9842756#zippy=%2Crequest-an-upload-key-reset) in Google Play Console.
+```text
+python tools/verify_esp8266_api.py
+```
 
+The project intentionally does not claim ESP32-only features that are absent from the supplied ESP8266 firmware.
 
-## Sultan ESP32 firmware compatibility (v1.1.0)
+## Build
 
-This Android project is matched to the supplied `sultan_clock_ESP32_apk_21_08_26.ino`.
-The firmware provides the Android API endpoints `/api/status` and `/saveweeklyplaylist`,
-persists two weekly MP3 schedule slots, and supports per-prayer Azan enable flags (`aze0`..`aze4`).
-The Android app limits weekly slots to the two slots supported by the firmware and clamps DFPlayer
-track numbers to the ESP32/DFPlayer range.
-
-### GitHub build
-
-Push the complete project to the `main` branch. The included GitHub Actions workflow installs
-Gradle 9.3.1, creates a standard debug keystore, and builds `app-debug.apk` automatically.
+Open the project in Android Studio and build the Debug variant. The included GitHub Actions workflow is configured for the project's Gradle toolchain.

@@ -34,7 +34,7 @@ fun DashboardScreen(
 ) {
     val isConnected = uiState.connectionStatus == ConnectionStatus.CONNECTED
     var showWebUiView by remember(uiState.selectedModel) {
-        mutableStateOf(uiState.selectedModel == ClockModel.ESP8266)
+        mutableStateOf(false)
     }
 
     LazyColumn(
@@ -355,13 +355,13 @@ fun DashboardScreen(
             ) {
                 if (uiState.selectedModel == ClockModel.ESP8266) {
                     QuickActionButton(
-                        title = "Hourly Beep",
+                        title = "Hourly Tone",
                         subtitle = if (uiState.dashboard.hourlyBeepEnabled) "Status: ON" else "Status: OFF",
                         icon = Icons.Default.NotificationsActive,
                         isActive = uiState.dashboard.hourlyBeepEnabled,
                         onClick = { viewModel.saveHourlyBeep(!uiState.dashboard.hourlyBeepEnabled) },
                         activeColor = AmberOrange,
-                        modifier = Modifier.weight(1f).testTag("toggle_hourly_beep_btn")
+                        modifier = Modifier.fillMaxWidth().testTag("toggle_hourly_beep_btn")
                     )
                 } else {
                     QuickActionButton(
@@ -373,24 +373,23 @@ fun DashboardScreen(
                         activeColor = SuccessGreen,
                         modifier = Modifier.weight(1f).testTag("toggle_prayer_btn")
                     )
+                    QuickActionButton(
+                        title = "Temp Sensor",
+                        subtitle = if (uiState.dashboard.isTempSensorOn) "Display: ON" else "Display: OFF",
+                        icon = Icons.Default.Thermostat,
+                        isActive = uiState.dashboard.isTempSensorOn,
+                        onClick = { viewModel.toggleTempSensor() },
+                        activeColor = WarningOrange,
+                        modifier = Modifier.weight(1f).testTag("toggle_temp_btn")
+                    )
                 }
-
-                QuickActionButton(
-                    title = "Temp Sensor",
-                    subtitle = if (uiState.dashboard.isTempSensorOn) "Display: ON" else "Display: OFF",
-                    icon = Icons.Default.Thermostat,
-                    isActive = uiState.dashboard.isTempSensorOn,
-                    onClick = { viewModel.toggleTempSensor() },
-                    activeColor = WarningOrange,
-                    modifier = Modifier.weight(1f).testTag("toggle_temp_btn")
-                )
             }
 
             Spacer(modifier = Modifier.height(20.dp))
         }
 
         // Islamic Prayer / Namaz Schedule Card
-        item {
+        if (uiState.selectedModel != ClockModel.ESP8266) item {
             SectionHeader(
                 title = "PRAYER / NAMAZ TIMES",
                 icon = Icons.Default.Mosque,
@@ -491,7 +490,7 @@ fun DashboardScreen(
             ) {
                 // Brightness / LDR Card
                 GlassCard(
-                    modifier = Modifier.weight(1f),
+                    modifier = if (uiState.selectedModel == ClockModel.ESP8266) Modifier.fillMaxWidth() else Modifier.weight(1f),
                     borderColor = GoldPrimary.copy(alpha = 0.4f)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -514,8 +513,8 @@ fun DashboardScreen(
                     )
                 }
 
-                // DFPlayer Mini Status Card
-                GlassCard(
+                // DFPlayer Mini Status Card (ESP32 only)
+                if (uiState.selectedModel != ClockModel.ESP8266) GlassCard(
                     modifier = Modifier.weight(1f),
                     borderColor = CyanAccent.copy(alpha = 0.4f)
                 ) {

@@ -19,7 +19,7 @@ enum class ClockModel(
         id = "esp8266",
         title = "ESP8266 Clock Hub",
         shortName = "ESP8266",
-        description = "Smart Clock: 192.168.4.1 -> 192.168.0.xxx Setup, Buzzer & D7 Light",
+        description = "ESP8266 + DS3231 + WS2812B: display, D7 light, alarms, tone engine, LDR, color studio, playlist, Wi-Fi & OTA",
         defaultApSsid = "SULTAN DIGITAL CLOCK"
     ),
     ESP32(
@@ -76,7 +76,7 @@ data class ClockDashboardData(
     val ipAddress: String = "192.168.4.1",
     val connectionType: String = "Wi-Fi LAN",
     val firmwareVersion: String = "v5.0-ESP32",
-    val detectedModel: ClockModel = ClockModel.ESP32,
+    val detectedModel: ClockModel = ClockModel.ESP8266,
     // ESP8266 specific properties
     val hourlyBeepEnabled: Boolean = true,
     val hourlyToneRangeEnabled: Boolean = false,

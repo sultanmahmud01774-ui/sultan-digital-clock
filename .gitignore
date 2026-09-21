@@ -27,6 +27,11 @@ render.experimental.xml
 *.jks
 *.keystore
 
+# Secrets & Environment variables
+.env
+.env.*
+!.env.example
+
 # Google Services (e.g. APIs or Firebase)
 google-services.json
 

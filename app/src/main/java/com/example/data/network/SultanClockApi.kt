@@ -132,28 +132,9 @@ open class Esp32Api {
         pass: String = ""
     ): ClockDashboardData? = withContext(Dispatchers.IO) {
         val client = getClientWithAuth(user, pass)
-
-        // 1. Try /api/status first (if firmware provides JSON)
         try {
-            val apiUrl = "${formatBaseUrl(host)}/api/status"
-            val request = Request.Builder()
-                .url(apiUrl)
-                .addHeader("Authorization", Credentials.basic(user, pass))
-                .get()
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                val body = response.body?.string() ?: ""
-                if (response.isSuccessful && body.trim().startsWith("{")) {
-                    return@withContext parseStatusJson(body, host)
-                }
-            }
-        } catch (e: Exception) {
-            Log.d(TAG, "/api/status not available, falling back to root HTML: ${e.message}")
-        }
-
-        // 2. Fetch root / (Web UI HTML) and parse live telemetry
-        try {
+            // Supplied ESP8266 firmware exposes its complete live state in the root HTML.
+            // Do not depend on the ESP32-only /api/status route.
             val rootUrl = "${formatBaseUrl(host)}/"
             val request = Request.Builder()
                 .url(rootUrl)
@@ -165,15 +146,14 @@ open class Esp32Api {
                 val html = response.body?.string() ?: ""
                 if (response.isSuccessful && html.isNotBlank()) {
                     return@withContext parseRootHtml(html, host)
-                } else if (response.code == 401) {
+                }
+                if (response.code == 401) {
                     Log.w(TAG, "getStatus 401 Unauthorized for $host")
-                    return@withContext null
                 }
             }
         } catch (e: Exception) {
             Log.w(TAG, "getStatus unreachable or offline: ${e.message}")
         }
-
         null
     }
 
@@ -327,7 +307,7 @@ open class Esp32Api {
                 azanWaqtEnabled = finalAzanWaqtEnabled,
                 azanTrack = finalAzanTrack,
                 alarms = finalAlarms,
-                weeklyPlaylist = finalWeeklyPlaylist
+                weeklyPlaylist = emptyList()
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse JSON status: ${e.message}")
@@ -366,14 +346,14 @@ open class Esp32Api {
                     (!html.contains("DFPlayer", ignoreCase = true) && !html.contains("prayerstatus", ignoreCase = true) && html.contains("sultan", ignoreCase = true))
 
             val detectedModel = if (isEsp8266) ClockModel.ESP8266 else ClockModel.ESP32
-            val fwVersion = if (isEsp8266) "v3.5-ESP8266" else "v5.0-ESP32"
+            val fwVersion = if (isEsp8266) "v8-ESP8266-ColorChangeSec" else "v5.0-ESP32"
 
             // 2. Hardware Switch States
             val isDisplayOn = extractRegex("id=['\"]displaystatus['\"][^>]*class=['\"]status-([a-zA-Z]+)['\"]", "on").equals("on", ignoreCase = true)
             val isLightOn = extractRegex("id=['\"]lightstatus['\"][^>]*class=['\"]status-([a-zA-Z]+)['\"]", "off").equals("on", ignoreCase = true)
-            val isTempSensorOn = extractRegex("id=['\"]tempstatus['\"][^>]*class=['\"]status-([a-zA-Z]+)['\"]", "on").equals("on", ignoreCase = true)
+            val isTempSensorOn = false
             val tempVal = extractRegex("([0-9.]+)\\s*&deg;C", "28.5").toFloatOrNull() ?: 28.5f
-            val isPrayerAlarmOn = extractRegex("id=['\"]prayerstatus['\"][^>]*class=['\"]status-([a-zA-Z]+)['\"]", "on").equals("on", ignoreCase = true)
+            val isPrayerAlarmOn = false
 
             // 3. Prayer Times (ESP32)
             val fajrTime = extractRegex("Fajr<br>([0-9:]+)", "04:12")
@@ -382,21 +362,11 @@ open class Esp32Api {
             val asrTime = extractRegex("Asr<br>([0-9:]+)", "16:35")
             val maghribTime = extractRegex("Maghrib<br>([0-9:]+)", "18:32")
             val ishaTime = extractRegex("Isha<br>([0-9:]+)", "19:48")
-            val prayerTimes = PrayerTimes(
-                fajr = fajrTime,
-                sunrise = sunriseTime,
-                dhuhr = dhuhrTime,
-                asr = asrTime,
-                maghrib = maghribTime,
-                isha = ishaTime,
-                isAzanAlarmEnabled = isPrayerAlarmOn
-            )
+            val prayerTimes: PrayerTimes? = null
 
             // 4. DFPlayer & Audio (ESP32 & ESP8266) & Buzzer Hourly Beep
-            val dfConnected = html.contains("DFPlayer Mini ready", ignoreCase = true) ||
-                    html.contains("DFPLAYER", ignoreCase = true) ||
-                    html.contains("dfvol", ignoreCase = true)
-            val dfVol = extractRegex("id=['\"]dfvol['\"][^>]*value=['\"]([0-9]+)['\"]", "22").toIntOrNull() ?: 22
+            val dfConnected = false
+            val dfVol = 0
             val hourlyChimeEnabled = hasChecked("hourlybeep_range") || hasChecked("hourlybeep2") || hasChecked("hourlybeep")
             val hourlyToneRangeEnabled = hasChecked("tonerangeen")
             val toneStartStr = extractRegex("id=['\"]tonestarthr['\"][^>]*value=['\"]([0-9:]+)['\"]", "07:00")
@@ -421,8 +391,8 @@ open class Esp32Api {
             // 7. Network Status
             val wifiSsid = extractRegex("Connected:\\s*<strong>(.*?)</strong>", extractRegex("id=['\"]wifissid['\"][^>]*value=['\"](.*?)['\"]", ""))
             val ipAddress = extractRegex("IP:\\s*([0-9.]+)", host)
-            val isWifiConn = wifiSsid.isNotBlank() && !html.contains("Wi-Fi disconnected", ignoreCase = true)
             val isApMode = html.contains("SoftAP", ignoreCase = true) || host.contains("192.168.4.1")
+            val isWifiConn = isApMode || (wifiSsid.isNotBlank() && !html.contains("Wi-Fi disconnected", ignoreCase = true))
 
             // 8. 12/24 Hour format
             val is12Hour = hasChecked("fmt12")
@@ -597,11 +567,11 @@ open class Esp32Api {
     }
 
     suspend fun togglePrayerAlarm(host: String, user: String, pass: String): ActionResponse {
-        return sendGet(host, "/toggleprayeralarm", emptyMap(), user, pass)
+        return ActionResponse(false, "Prayer/Azan control is not supported by the supplied ESP8266 firmware.")
     }
 
     suspend fun toggleTempSensor(host: String, user: String, pass: String): ActionResponse {
-        return sendGet(host, "/toggletempsensor", emptyMap(), user, pass)
+        return ActionResponse(false, "Temperature sensor control is not supported by the supplied ESP8266 firmware.")
     }
 
     // 4. Date Settings
@@ -618,11 +588,7 @@ open class Esp32Api {
             "bangla" to if (config.isBanglaDate) "1" else "0",
             "showBanglaDate" to if (config.isBanglaDate) "1" else "0"
         )
-        val res = sendGet(host, "/savedatesettings", params, user, pass)
-        if (!res.isSuccess) {
-            return sendGet(host, "/savedate", params, user, pass)
-        }
-        return res
+        return sendGet(host, "/savedatesettings", params, user, pass)
     }
 
     // 5. Alarm Settings (TWO separate calls, one per alarm, with i,h,m,e,t)
@@ -761,13 +727,11 @@ open class Esp32Api {
 
     // 9. DFPlayer Volume & Track Test
     suspend fun saveDfVolume(host: String, volume: Int, user: String, pass: String): ActionResponse {
-        val params = mapOf("vol" to volume.coerceIn(0, 30).toString())
-        return sendGet(host, "/savedfvolume", params, user, pass)
+        return ActionResponse(false, "DFPlayer volume is not supported by the supplied ESP8266 firmware.")
     }
 
     suspend fun testDfTrack(host: String, track: Int, user: String, pass: String): ActionResponse {
-        val params = mapOf("idx" to track.toString())
-        return sendGet(host, "/testdftrack", params, user, pass)
+        return ActionResponse(false, "DFPlayer track control is not supported by the supplied ESP8266 firmware. Use Tone Test instead.")
     }
 
     // 10. Hourly Chime
@@ -777,15 +741,26 @@ open class Esp32Api {
         user: String,
         pass: String
     ): ActionResponse {
-        var mask = 0
-        config.poolTracks.forEach { track -> mask = mask or (1 shl (track - 1)) }
-        val params = mapOf(
-            "mode" to config.mode.toString(),
-            "fixed" to config.fixedTrack.toString(),
-            "mask" to mask.toString(),
-            "byhour" to config.hourlyTracks.joinToString(",")
+        // The supplied ESP8266 firmware exposes hourly tone enable and its active
+        // time range, but it does not expose the ESP32-style hourly track pool/mode API.
+        val settings = sendGet(
+            host, "/savesettings",
+            mapOf(
+                "f" to "0",
+                "sd" to "1",
+                "cb" to "0",
+                "hb" to if (config.enabled) "1" else "0"
+            ), user, pass
         )
-        return sendGet(host, "/savehourlymode", params, user, pass)
+        if (!settings.isSuccess) return settings
+        return sendGet(
+            host, "/savetonerange",
+            mapOf(
+                "en" to if (config.toneRangeEnabled) "1" else "0",
+                "sh" to config.toneStartHour.coerceIn(0, 23).toString(),
+                "eh" to config.toneEndHour.coerceIn(0, 23).toString()
+            ), user, pass
+        )
     }
 
     suspend fun saveToneRange(
@@ -811,28 +786,7 @@ open class Esp32Api {
         user: String,
         pass: String
     ): ActionResponse {
-        val params = mapOf(
-            "az0" to config.fajrTrack.toString(),
-            "az1" to config.dhuhrTrack.toString(),
-            "az2" to config.asrTrack.toString(),
-            "az3" to config.maghribTrack.toString(),
-            "az4" to config.ishaTrack.toString(),
-            "al0" to config.alarm1Track.toString(),
-            "al1" to config.alarm2Track.toString()
-        )
-        val trackRes = sendGet(host, "/savetracks", params, user, pass)
-        if (!trackRes.isSuccess) return trackRes
-
-        return saveWaqtAzan(
-            host = host,
-            fajr = config.fajrEnabled,
-            dhuhr = config.dhuhrEnabled,
-            asr = config.asrEnabled,
-            maghrib = config.maghribEnabled,
-            isha = config.ishaEnabled,
-            user = user,
-            pass = pass
-        )
+        return ActionResponse(false, "Azan/DFPlayer track assignment is not supported by the supplied ESP8266 firmware.")
     }
 
     suspend fun saveWaqtAzan(
@@ -845,14 +799,7 @@ open class Esp32Api {
         user: String,
         pass: String
     ): ActionResponse {
-        val params = mapOf(
-            "fajr" to if (fajr) "1" else "0",
-            "dhuhr" to if (dhuhr) "1" else "0",
-            "asr" to if (asr) "1" else "0",
-            "maghrib" to if (maghrib) "1" else "0",
-            "isha" to if (isha) "1" else "0"
-        )
-        return sendGet(host, "/savewaqtazan", params, user, pass)
+        return ActionResponse(false, "Prayer/Waqt audio controls are not supported by the supplied ESP8266 firmware.")
     }
 
     suspend fun saveDisplaySettings(
@@ -880,22 +827,7 @@ open class Esp32Api {
         user: String,
         pass: String
     ): ActionResponse {
-        val params = mutableMapOf<String, String>()
-        slots.take(2).forEachIndexed { index, slot ->
-            val p = "wp${index}_"
-            params[p + "en"] = if (slot.enabled) "1" else "0"
-            params[p + "h"] = slot.hour.toString()
-            params[p + "m"] = slot.minute.toString()
-            // t0=Sun t1=Mon t2=Tue t3=Wed t4=Thu t5=Fri t6=Sat
-            params[p + "t0"] = slot.sunTrack.toString()
-            params[p + "t1"] = slot.monTrack.toString()
-            params[p + "t2"] = slot.tueTrack.toString()
-            params[p + "t3"] = slot.wedTrack.toString()
-            params[p + "t4"] = slot.thuTrack.toString()
-            params[p + "t5"] = slot.friTrack.toString()
-            params[p + "t6"] = slot.satTrack.toString()
-        }
-        return sendGet(host, "/saveweeklyplaylist", params, user, pass)
+        return ActionResponse(false, "Weekly audio playlist is not supported by the supplied ESP8266 firmware.")
     }
 
     // 13. Color Playlist - Strictly separated for ESP8266 vs ESP32
@@ -1044,10 +976,7 @@ open class Esp32Api {
 
     // 15. Security Passwords
     suspend fun changeApPassword(host: String, newPass: String, user: String, pass: String): ActionResponse {
-        if (newPass.length < 8 || newPass.length > 19) {
-            return ActionResponse(false, "AP Password must be 8-19 characters (WPA2 requirement).")
-        }
-        return sendGet(host, "/changeappass", mapOf("appass" to newPass), user, pass)
+        return ActionResponse(false, "AP password change is not exposed by the supplied ESP8266 firmware API.")
     }
 
     suspend fun changeWebPassword(
@@ -1084,11 +1013,11 @@ open class Esp32Api {
     }
 
     suspend fun resetDefaultPassword(host: String, user: String, pass: String): ActionResponse {
-        return sendGet(host, "/resetdefaultpass", emptyMap(), user, pass)
+        return ActionResponse(false, "Default-password reset is not exposed by the supplied ESP8266 firmware API.")
     }
 
     suspend fun showWifiPassword(host: String, user: String, pass: String): ActionResponse {
-        return sendGet(host, "/showwifipass", emptyMap(), user, pass)
+        return ActionResponse(false, "Wi-Fi password display is not exposed by the supplied ESP8266 firmware API.")
     }
 
     suspend fun saveDateDisplaySettings(
@@ -1105,11 +1034,7 @@ open class Esp32Api {
             "bangla" to if (banglaDate) "1" else "0",
             "showBanglaDate" to if (banglaDate) "1" else "0"
         )
-        val res = sendGet(host, "/savedatesettings", params, user, pass)
-        if (!res.isSuccess) {
-            return sendGet(host, "/savedate", params, user, pass)
-        }
-        return res
+        return sendGet(host, "/savedatesettings", params, user, pass)
     }
 
     // 16. OTA Firmware Update
