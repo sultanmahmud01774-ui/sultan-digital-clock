@@ -96,6 +96,7 @@ fun Esp8266HubScreen(
     var isSetupWizardExpanded by remember { mutableStateOf(uiState.activeHost == "192.168.4.1" || uiState.isRebooting) }
     var routerPasswordVisible by remember { mutableStateOf(false) }
     var isWebConsoleOpen by remember { mutableStateOf(false) }
+    var isDirectIpWebOpen by remember { mutableStateOf(false) }
     var isPasswordResetDialogOpen by remember { mutableStateOf(false) }
 
     // Wi-Fi setup form state
@@ -239,6 +240,23 @@ fun Esp8266HubScreen(
                                     Icon(Icons.Default.Settings, contentDescription = null, tint = AmberOrange, modifier = Modifier.size(11.dp))
                                     Spacer(modifier = Modifier.width(3.dp))
                                     Text("Web UI", fontSize = 10.sp, color = TextPrimary)
+                                }
+                            }
+
+                            // Direct IP Browser Quick Launcher
+                            Surface(
+                                onClick = { isDirectIpWebOpen = true },
+                                shape = RoundedCornerShape(6.dp),
+                                color = CyanAccent.copy(alpha = 0.12f),
+                                border = BorderStroke(1.dp, CyanAccent.copy(alpha = 0.4f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.Share, contentDescription = null, tint = CyanAccent, modifier = Modifier.size(11.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text("IP Web", fontSize = 10.sp, color = CyanAccent, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -2427,7 +2445,7 @@ fun Esp8266HubScreen(
                 EspWebUiConsole(
                     viewModel = viewModel,
                     uiState = uiState,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.weight(1f).fillMaxWidth()
                 )
             }
         }
@@ -2462,6 +2480,15 @@ fun Esp8266HubScreen(
                 }
             },
             containerColor = CardBackgroundElevated
+        )
+    }
+
+    if (isDirectIpWebOpen) {
+        DirectIpWebDialog(
+            host = uiState.activeHost,
+            username = uiState.username,
+            passwordInput = uiState.passwordInput,
+            onDismiss = { isDirectIpWebOpen = false }
         )
     }
 }

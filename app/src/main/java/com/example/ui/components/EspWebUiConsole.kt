@@ -140,7 +140,8 @@ private fun TimePickerDropdown(
 fun EspWebUiConsole(
     viewModel: ClockViewModel,
     uiState: SultanClockUiState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    scrollable: Boolean = true
 ) {
     // 13 RTTTL Tone names from Arduino code
     val toneNames = remember {
@@ -199,10 +200,16 @@ fun EspWebUiConsole(
     var toneIndexLocal by remember(uiState.hourlyChime.fixedTrack) { mutableIntStateOf(uiState.hourlyChime.fixedTrack.coerceIn(0, 12)) }
     var activeTonePlaying by remember { mutableStateOf<Int?>(null) }
 
+    val scrollModifier = if (scrollable) {
+        Modifier.verticalScroll(rememberScrollState())
+    } else {
+        Modifier
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
+            .then(scrollModifier)
             .padding(horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -1602,7 +1609,11 @@ fun EspWebUiConsole(
             val previewColor = when (uiState.colorConfig.mode) {
                 0, 1 -> paletteColors.getOrElse(uiState.colorConfig.staticColorIndex.coerceIn(0, 11)) { Color.Red }
                 2 -> Color(0xFFFF5252)
-                3 -> Color(uiState.colorConfig.red, uiState.colorConfig.green, uiState.colorConfig.blue)
+                3 -> Color(
+                    uiState.colorConfig.red.coerceIn(0, 255),
+                    uiState.colorConfig.green.coerceIn(0, 255),
+                    uiState.colorConfig.blue.coerceIn(0, 255)
+                )
                 4 -> Color(0xFF00E5FF)
                 else -> Color.Red
             }

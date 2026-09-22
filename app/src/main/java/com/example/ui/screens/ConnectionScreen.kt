@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.ClockModel
 import com.example.data.model.ConnectionStatus
 import com.example.data.storage.DevicePreferences
+import com.example.ui.components.DirectIpWebDialog
 import com.example.ui.components.GlassCard
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.ClockViewModel
@@ -45,6 +46,7 @@ fun ConnectionScreen(
     onNavigateToDashboard: () -> Unit
 ) {
     var isPasswordVisible by remember { mutableStateOf(false) }
+    var isDirectIpWebOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.connectionStatus) {
         if (uiState.connectionStatus == ConnectionStatus.CONNECTED) {
@@ -465,6 +467,31 @@ fun ConnectionScreen(
                             fontWeight = FontWeight.Bold
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Open Direct IP Web UI
+                    Button(
+                        onClick = { isDirectIpWebOpen = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("open_direct_ip_web_btn"),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = CardBackgroundElevated,
+                            contentColor = CyanAccent
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, CyanAccent.copy(alpha = 0.5f))
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "DIRECT IP WEB UI (সরাসরি ব্রাউজারে খুলুন)",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(18.dp))
@@ -661,6 +688,15 @@ fun ConnectionScreen(
                 }
             },
             containerColor = CardBackground
+        )
+    }
+
+    if (isDirectIpWebOpen) {
+        DirectIpWebDialog(
+            host = uiState.activeHost,
+            username = uiState.username,
+            passwordInput = uiState.passwordInput,
+            onDismiss = { isDirectIpWebOpen = false }
         )
     }
 }

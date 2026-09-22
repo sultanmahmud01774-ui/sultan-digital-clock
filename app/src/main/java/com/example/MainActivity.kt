@@ -220,7 +220,7 @@ fun SultanClockMainApp(viewModel: ClockViewModel) {
                         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
                     )
                 ) {
-                    MainNavScreen.values().forEach { screen ->
+                    MainNavScreen.entries.forEach { screen ->
                         val isSelected = currentScreen == screen
                         val tintColor = when (screen) {
                             MainNavScreen.ESP8266_HUB -> AmberOrange

@@ -385,17 +385,20 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
             val pass = _uiState.value.passwordInput
 
             // Try candidate hosts in order:
-            // 1) Last-successfully-connected saved IP first (from DevicePreferences)
-            // 2) User-entered host
+            // 1) Explicit target or user-entered host first (instant response)
+            // 2) Last-successfully-connected saved IP (from DevicePreferences)
             // 3) 192.168.4.1 (AP fallback)
             // 4) sultanclock.local LAST (low-priority fallback)
             val candidateHosts = mutableListOf<String>()
+            val explicitTarget = targetHost?.trim()?.takeIf { it.isNotBlank() }
+            if (explicitTarget != null) {
+                candidateHosts.add(explicitTarget)
+            } else if (hostToTry.isNotBlank()) {
+                candidateHosts.add(hostToTry.trim())
+            }
             val savedIp = prefs.ipAddress.trim()
             if (savedIp.isNotEmpty() && savedIp != DevicePreferences.DEFAULT_MDNS_HOST) {
                 candidateHosts.add(savedIp)
-            }
-            if (hostToTry.isNotBlank()) {
-                candidateHosts.add(hostToTry.trim())
             }
             candidateHosts.add(DevicePreferences.DEFAULT_AP_IP)
             candidateHosts.add(DevicePreferences.DEFAULT_MDNS_HOST)
@@ -610,9 +613,11 @@ class ClockViewModel(application: Application) : AndroidViewModel(application) {
                     Log.w("ClockViewModel", "Live status polling error: ${e.message}")
                     consecutiveErrors++
                     if (consecutiveErrors >= 2) {
-                        delay(7000) // Back off on connection errors
-                        continue
+                        delay(8000) // Back off on repeated connection errors
+                    } else {
+                        delay(3500)
                     }
+                    continue
                 }
                 delay(3500) // Poll every 3.5 seconds while Home/Controls screen is visible
             }

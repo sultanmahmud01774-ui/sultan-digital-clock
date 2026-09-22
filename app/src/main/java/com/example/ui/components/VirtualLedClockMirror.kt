@@ -91,41 +91,40 @@ fun VirtualLedClockMirror(
         }
     }
 
-    val isAnimatedMode = colorConfig.mode == 1 || colorConfig.mode == 2 || colorConfig.mode == 4
+    val isAnimatedMode = dashboardData.isDisplayOn && (colorConfig.mode == 1 || colorConfig.mode == 2 || colorConfig.mode == 4)
     val staticBaseColor = remember(colorConfig.red, colorConfig.green, colorConfig.blue) {
         Color(colorConfig.red, colorConfig.green, colorConfig.blue)
     }
 
-    // Smooth transitions for animated color modes
-    val infiniteTransition = rememberInfiniteTransition(label = "LedClockAnim")
-    val rainbowHue by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 6000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "RainbowHue"
-    )
-
-    val fadeAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "FadeAlpha"
-    )
-
-    // Determine primary segment color based on Clock's active color mode
-    val activeBaseColor = when (colorConfig.mode) {
-        0 -> staticBaseColor // Static / RGB
-        1 -> staticBaseColor.copy(alpha = fadeAlpha) // Smooth Fade
-        2 -> Color.hsv(rainbowHue, 0.85f, 1f) // Rainbow Wave
-        3 -> staticBaseColor // Custom RGB
-        4 -> Color.hsv((rainbowHue + 180) % 360, 0.9f, 1f) // Sweep
-        else -> NeonGold
+    // Determine primary segment color based on Clock's active color mode (only animates if mode requires it)
+    val activeBaseColor = if (isAnimatedMode) {
+        val infiniteTransition = rememberInfiniteTransition(label = "LedClockAnim")
+        val rainbowHue by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 6000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "RainbowHue"
+        )
+        val fadeAlpha by infiniteTransition.animateFloat(
+            initialValue = 0.35f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 2000, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "FadeAlpha"
+        )
+        when (colorConfig.mode) {
+            1 -> staticBaseColor.copy(alpha = fadeAlpha) // Smooth Fade
+            2 -> Color.hsv(rainbowHue, 0.85f, 1f) // Rainbow Wave
+            4 -> Color.hsv((rainbowHue + 180) % 360, 0.9f, 1f) // Sweep
+            else -> staticBaseColor
+        }
+    } else {
+        staticBaseColor
     }
 
     val displayColor = if (dashboardData.isDisplayOn) activeBaseColor else Color(0xFF1E2430)
@@ -140,7 +139,13 @@ fun VirtualLedClockMirror(
                 val parts = cleanTime.split(":")
                 val h = parts.getOrNull(0)?.padStart(2, '0') ?: "12"
                 val m = parts.getOrNull(1)?.padStart(2, '0') ?: "00"
-                listOf(h[0], h[1], m[0], m[1], true)
+                listOf(
+                    h.getOrElse(0) { '1' },
+                    h.getOrElse(1) { '2' },
+                    m.getOrElse(0) { '0' },
+                    m.getOrElse(1) { '0' },
+                    true
+                )
             }
             MirrorViewMode.ENGLISH_DATE -> {
                 // e.g. "2026-09-20" or "20/09"
@@ -159,7 +164,13 @@ fun VirtualLedClockMirror(
                     val cal = Calendar.getInstance()
                     String.format("%02d", cal.get(Calendar.DAY_OF_MONTH)) to String.format("%02d", cal.get(Calendar.MONTH) + 1)
                 }
-                listOf(dStr[0], dStr.getOrElse(1) { '0' }, mStr[0], mStr.getOrElse(1) { '0' }, false)
+                listOf(
+                    dStr.getOrElse(0) { '2' },
+                    dStr.getOrElse(1) { '0' },
+                    mStr.getOrElse(0) { '0' },
+                    mStr.getOrElse(1) { '9' },
+                    false
+                )
             }
             MirrorViewMode.BANGLA_DATE -> {
                 // e.g. "5/6/1433" -> Day 05, Month 06 -> "0506"
@@ -172,7 +183,13 @@ fun VirtualLedClockMirror(
                 } else {
                     BengaliCalendarHelper.getBanglaDate().fourDigits
                 }
-                listOf(digits[0], digits[1], digits[2], digits[3], false)
+                listOf(
+                    digits.getOrElse(0) { '0' },
+                    digits.getOrElse(1) { '5' },
+                    digits.getOrElse(2) { '0' },
+                    digits.getOrElse(3) { '6' },
+                    false
+                )
             }
         }
     }
@@ -604,7 +621,7 @@ fun SevenSegmentDigit(
     height: Dp,
     modifier: Modifier = Modifier
 ) {
-    val pattern = SEGMENT_PATTERNS[char] ?: SEGMENT_PATTERNS[' ']!!
+    val pattern = SEGMENT_PATTERNS[char] ?: (SEGMENT_PATTERNS[' '] ?: 0)
 
     Canvas(
         modifier = modifier

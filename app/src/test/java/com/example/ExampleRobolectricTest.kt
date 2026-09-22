@@ -18,6 +18,9 @@ class ExampleRobolectricTest {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val appName = context.getString(R.string.app_name)
     assertEquals("Sultan Digital Clock", appName)
+    val bitmap = android.graphics.BitmapFactory.decodeResource(context.resources, R.drawable.sultan_avatar)
+    println("Decoded bitmap: $bitmap")
+    assertNotNull(bitmap)
   }
 
   @Test

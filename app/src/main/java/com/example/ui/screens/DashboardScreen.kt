@@ -36,6 +36,7 @@ fun DashboardScreen(
     var showWebUiView by remember(uiState.selectedModel) {
         mutableStateOf(false)
     }
+    var isDirectIpWebOpen by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier
@@ -78,33 +79,6 @@ fun DashboardScreen(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Surface(
-                    onClick = { showWebUiView = true },
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (showWebUiView) GoldPrimary else Color.Transparent,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Tv,
-                            contentDescription = null,
-                            tint = if (showWebUiView) Color.Black else TextSecondary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "HARDWARE WEB UI",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (showWebUiView) Color.Black else TextSecondary
-                        )
-                    }
-                }
-
-                Surface(
                     onClick = { showWebUiView = false },
                     shape = RoundedCornerShape(10.dp),
                     color = if (!showWebUiView) GoldPrimary else Color.Transparent,
@@ -119,14 +93,69 @@ fun DashboardScreen(
                             imageVector = Icons.Default.Dashboard,
                             contentDescription = null,
                             tint = if (!showWebUiView) Color.Black else TextSecondary,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(15.dp)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "APP DASHBOARD",
+                            text = "APP VIEW",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (!showWebUiView) Color.Black else TextSecondary
+                        )
+                    }
+                }
+
+                Surface(
+                    onClick = { showWebUiView = true },
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (showWebUiView) GoldPrimary else Color.Transparent,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Tv,
+                            contentDescription = null,
+                            tint = if (showWebUiView) Color.Black else TextSecondary,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "WEB UI",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (showWebUiView) Color.Black else TextSecondary
+                        )
+                    }
+                }
+
+                Surface(
+                    onClick = { isDirectIpWebOpen = true },
+                    shape = RoundedCornerShape(10.dp),
+                    color = CyanAccent.copy(alpha = 0.14f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CyanAccent.copy(alpha = 0.4f)),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = null,
+                            tint = CyanAccent,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "IP WEB",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CyanAccent
                         )
                     }
                 }
@@ -139,7 +168,8 @@ fun DashboardScreen(
             item {
                 EspWebUiConsole(
                     viewModel = viewModel,
-                    uiState = uiState
+                    uiState = uiState,
+                    scrollable = false
                 )
             }
         } else {
@@ -562,6 +592,16 @@ fun DashboardScreen(
             onRestoreProfile = { profile -> viewModel.restoreProfile(profile) },
             onDeleteProfile = { profileId -> viewModel.deleteProfile(profileId) },
             onDismiss = { viewModel.openProfileBackup(false) }
+        )
+    }
+
+    // Direct IP Web Browser Dialog
+    if (isDirectIpWebOpen) {
+        DirectIpWebDialog(
+            host = uiState.activeHost,
+            username = uiState.username,
+            passwordInput = uiState.passwordInput,
+            onDismiss = { isDirectIpWebOpen = false }
         )
     }
 }

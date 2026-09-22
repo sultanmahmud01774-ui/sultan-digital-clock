@@ -21,15 +21,42 @@ open class Esp32Api {
 
     companion object {
         private const val TAG = "Esp32Api"
-        private const val DEFAULT_TIMEOUT_SEC = 3L
-        private const val LONG_TIMEOUT_SEC = 10L
+        private const val DEFAULT_TIMEOUT_SEC = 2L
+        private const val LONG_TIMEOUT_SEC = 8L
+
+        // Precompiled Regexes to eliminate GC pressure and main-thread / polling thread stutters
+        private val RAW_TIME_REGEX = Regex("<div[^>]*class=['\"][^'\"]*time-main[^'\"]*['\"][^>]*>(.*?)</div>", RegexOption.IGNORE_CASE)
+        private val HTML_TAGS_REGEX = Regex("<[^>]*>")
+        private val RAW_DATE_REGEX = Regex("<div[^>]*class=['\"][^'\"]*time-date[^'\"]*['\"][^>]*>([^<]+)</div>", RegexOption.IGNORE_CASE)
+        private val BANGLA_REGEX = Regex("বাংলা:\\s*([0-9/]+|[^<\\s]+)", RegexOption.IGNORE_CASE)
+        private val DISPLAY_STATUS_REGEX = Regex("id=['\"]displaystatus['\"][^>]*class=['\"]status-([a-zA-Z]+)['\"]", RegexOption.IGNORE_CASE)
+        private val LIGHT_STATUS_REGEX = Regex("id=['\"]lightstatus['\"][^>]*class=['\"]status-([a-zA-Z]+)['\"]", RegexOption.IGNORE_CASE)
+        private val TEMP_REGEX = Regex("([0-9.]+)\\s*&deg;C", RegexOption.IGNORE_CASE)
+        private val TONE_START_REGEX = Regex("id=['\"]tonestarthr['\"][^>]*value=['\"]([0-9:]+)['\"]", RegexOption.IGNORE_CASE)
+        private val TONE_END_REGEX = Regex("id=['\"]toneendhr['\"][^>]*value=['\"]([0-9:]+)['\"]", RegexOption.IGNORE_CASE)
+        private val HMODE_REGEX = Regex("value=['\"]([0-3])['\"][^>]*name=['\"]hmode['\"][^>]*checked|name=['\"]hmode['\"][^>]*value=['\"]([0-3])['\"][^>]*checked", RegexOption.IGNORE_CASE)
+        private val LDR_RAW_REGEX = Regex("Live LDR Raw:\\s*<strong>([0-9]+)</strong>", RegexOption.IGNORE_CASE)
+        private val APPLIED_BRIGHT_REGEX1 = Regex("Applied Brightness:\\s*<strong>([0-9]+)</strong>", RegexOption.IGNORE_CASE)
+        private val APPLIED_BRIGHT_REGEX2 = Regex("id=['\"]bright['\"][^>]*value=['\"]([0-9]+)['\"]", RegexOption.IGNORE_CASE)
+        private val COLOR_MODE_REGEX = Regex("<select[^>]*id=['\"]colormode['\"][^>]*>.*?<option value=['\"]([0-4])['\"]\\s*selected", RegexOption.IGNORE_CASE)
+        private val PLAYLIST_STATUS_REGEX = Regex("id=['\"]plstatus['\"][^>]*class=['\"]status-([a-zA-Z]+)['\"]", RegexOption.IGNORE_CASE)
+        private val WIFI_SSID_CONNECTED_REGEX = Regex("Connected:\\s*<strong>(.*?)</strong>", RegexOption.IGNORE_CASE)
+        private val WIFI_SSID_INPUT_REGEX = Regex("id=['\"]wifissid['\"][^>]*value=['\"](.*?)['\"]", RegexOption.IGNORE_CASE)
+        private val IP_REGEX = Regex("IP:\\s*([0-9.]+)", RegexOption.IGNORE_CASE)
+        private val ALARM0_TIME_REGEX = Regex("id=['\"]alarm0['\"][^>]*value=['\"]([0-9:]+)['\"]", RegexOption.IGNORE_CASE)
+        private val ALARM0_TRACK_REGEX = Regex("id=['\"]al0['\"][^>]*value=['\"]([0-9]+)['\"]", RegexOption.IGNORE_CASE)
+        private val ALARM1_TIME_REGEX = Regex("id=['\"]alarm1['\"][^>]*value=['\"]([0-9:]+)['\"]", RegexOption.IGNORE_CASE)
+        private val ALARM1_TRACK_REGEX = Regex("id=['\"]al1['\"][^>]*value=['\"]([0-9]+)['\"]", RegexOption.IGNORE_CASE)
+        private val AZAN_TRACK_REGEXES = (0..4).map { i ->
+            Regex("id=['\"]az$i['\"][^>]*value=['\"]([0-9]+)['\"]", RegexOption.IGNORE_CASE)
+        }
     }
 
     private val baseClient = OkHttpClient.Builder()
         .connectTimeout(DEFAULT_TIMEOUT_SEC, TimeUnit.SECONDS)
         .readTimeout(DEFAULT_TIMEOUT_SEC, TimeUnit.SECONDS)
         .writeTimeout(DEFAULT_TIMEOUT_SEC, TimeUnit.SECONDS)
-        .retryOnConnectionFailure(true)
+        .retryOnConnectionFailure(false)
         .build()
 
     private fun getClientWithAuth(username: String, password: String): OkHttpClient {
@@ -60,7 +87,7 @@ open class Esp32Api {
     /**
      * Check TCP connection to candidate host and port 80
      */
-    suspend fun pingHost(hostOrIp: String, port: Int = 80, timeoutMs: Int = 2000): Boolean =
+    suspend fun pingHost(hostOrIp: String, port: Int = 80, timeoutMs: Int = 1500): Boolean =
         withContext(Dispatchers.IO) {
             try {
                 var cleanHost = hostOrIp.replace("http://", "").replace("https://", "")
@@ -77,18 +104,18 @@ open class Esp32Api {
         }
 
     /**
-     * Test connection and authentication using /checkauth with fallback to root /
+     * Test connection and authentication directly against root / for instant response
      */
     suspend fun checkConnection(
         host: String,
         user: String = "admin",
         pass: String = ""
     ): Pair<ConnectionStatus, String> = withContext(Dispatchers.IO) {
-        val checkAuthUrl = "${formatBaseUrl(host)}/checkauth"
+        val rootUrl = "${formatBaseUrl(host)}/"
         try {
             val client = getClientWithAuth(user, pass)
             val request = Request.Builder()
-                .url(checkAuthUrl)
+                .url(rootUrl)
                 .addHeader("Authorization", Credentials.basic(user, pass))
                 .get()
                 .build()
@@ -97,27 +124,12 @@ open class Esp32Api {
                 when (response.code) {
                     200 -> ConnectionStatus.CONNECTED to "Connected successfully"
                     401 -> ConnectionStatus.AUTH_REQUIRED to "Authentication required (401)"
-                    404 -> {
-                        // Fallback to root / if /checkauth is not defined
-                        val rootReq = Request.Builder()
-                            .url("${formatBaseUrl(host)}/")
-                            .addHeader("Authorization", Credentials.basic(user, pass))
-                            .get()
-                            .build()
-                        client.newCall(rootReq).execute().use { rootResp ->
-                            when (rootResp.code) {
-                                200 -> ConnectionStatus.CONNECTED to "Connected successfully"
-                                401 -> ConnectionStatus.AUTH_REQUIRED to "Authentication required (401)"
-                                else -> ConnectionStatus.ERROR to "HTTP status: ${rootResp.code}"
-                            }
-                        }
-                    }
                     else -> ConnectionStatus.ERROR to "HTTP status: ${response.code}"
                 }
             }
         } catch (e: IOException) {
-            Log.w(TAG, "Connection failed to $checkAuthUrl: ${e.message}")
-            ConnectionStatus.DISCONNECTED to (e.localizedMessage ?: "ESP32 offline or unreachable")
+            Log.w(TAG, "Connection failed to $rootUrl: ${e.message}")
+            ConnectionStatus.DISCONNECTED to (e.localizedMessage ?: "ESP offline or unreachable")
         } catch (e: Exception) {
             ConnectionStatus.ERROR to (e.localizedMessage ?: "Connection error")
         }
@@ -307,7 +319,7 @@ open class Esp32Api {
                 azanWaqtEnabled = finalAzanWaqtEnabled,
                 azanTrack = finalAzanTrack,
                 alarms = finalAlarms,
-                weeklyPlaylist = emptyList()
+                weeklyPlaylist = finalWeeklyPlaylist
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse JSON status: ${e.message}")
@@ -321,22 +333,25 @@ open class Esp32Api {
      */
     fun parseRootHtml(html: String, host: String): ClockDashboardData {
         return try {
-            fun extractRegex(pattern: String, default: String = ""): String {
-                val match = Regex(pattern, RegexOption.IGNORE_CASE).find(html)
+            fun extractRegex(regex: Regex, default: String = ""): String {
+                val match = regex.find(html)
                 return match?.groups?.get(1)?.value?.trim() ?: default
             }
 
             fun hasChecked(id: String): Boolean {
-                val pattern = "id=['\"]$id['\"][^>]*checked|checked[^>]*id=['\"]$id['\"]"
-                return Regex(pattern, RegexOption.IGNORE_CASE).containsMatchIn(html)
+                val idx = html.indexOf(id, ignoreCase = true)
+                if (idx == -1) return false
+                val start = (idx - 60).coerceAtLeast(0)
+                val end = (idx + 60).coerceAtMost(html.length)
+                val snippet = html.substring(start, end)
+                return snippet.contains("checked", ignoreCase = true)
             }
 
             // 1. Live Time & Date
-            // Strip any inner html tags (such as <span ...> AM</span>) from time-main
-            val rawTimeMatch = Regex("<div[^>]*class=['\"][^'\"]*time-main[^'\"]*['\"][^>]*>(.*?)</div>", RegexOption.IGNORE_CASE).find(html)
-            val rawTime = rawTimeMatch?.groups?.get(1)?.value?.replace(Regex("<[^>]*>"), " ")?.trim() ?: "12:00:00"
-            val rawDate = extractRegex("<div[^>]*class=['\"][^'\"]*time-date[^'\"]*['\"][^>]*>([^<]+)</div>", "")
-            val bangla = extractRegex("বাংলা:\\s*([0-9/]+|[^<\\s]+)").takeIf { it.isNotBlank() }
+            val rawTimeMatch = RAW_TIME_REGEX.find(html)
+            val rawTime = rawTimeMatch?.groups?.get(1)?.value?.replace(HTML_TAGS_REGEX, " ")?.trim() ?: "12:00:00"
+            val rawDate = extractRegex(RAW_DATE_REGEX, "")
+            val bangla = extractRegex(BANGLA_REGEX).takeIf { it.isNotBlank() }
 
             // Detect Model
             val isEsp8266 = html.contains("SULTAN CLOCK (FIXED VERSION)", ignoreCase = true) ||
@@ -349,19 +364,13 @@ open class Esp32Api {
             val fwVersion = if (isEsp8266) "v8-ESP8266-ColorChangeSec" else "v5.0-ESP32"
 
             // 2. Hardware Switch States
-            val isDisplayOn = extractRegex("id=['\"]displaystatus['\"][^>]*class=['\"]status-([a-zA-Z]+)['\"]", "on").equals("on", ignoreCase = true)
-            val isLightOn = extractRegex("id=['\"]lightstatus['\"][^>]*class=['\"]status-([a-zA-Z]+)['\"]", "off").equals("on", ignoreCase = true)
+            val isDisplayOn = extractRegex(DISPLAY_STATUS_REGEX, "on").equals("on", ignoreCase = true)
+            val isLightOn = extractRegex(LIGHT_STATUS_REGEX, "off").equals("on", ignoreCase = true)
             val isTempSensorOn = false
-            val tempVal = extractRegex("([0-9.]+)\\s*&deg;C", "28.5").toFloatOrNull() ?: 28.5f
+            val tempVal = extractRegex(TEMP_REGEX, "28.5").toFloatOrNull() ?: 28.5f
             val isPrayerAlarmOn = false
 
             // 3. Prayer Times (ESP32)
-            val fajrTime = extractRegex("Fajr<br>([0-9:]+)", "04:12")
-            val sunriseTime = extractRegex("Sunrise<br>([0-9:]+)", "05:28")
-            val dhuhrTime = extractRegex("Dhuhr<br>([0-9:]+)", "12:05")
-            val asrTime = extractRegex("Asr<br>([0-9:]+)", "16:35")
-            val maghribTime = extractRegex("Maghrib<br>([0-9:]+)", "18:32")
-            val ishaTime = extractRegex("Isha<br>([0-9:]+)", "19:48")
             val prayerTimes: PrayerTimes? = null
 
             // 4. DFPlayer & Audio (ESP32 & ESP8266) & Buzzer Hourly Beep
@@ -369,28 +378,28 @@ open class Esp32Api {
             val dfVol = 0
             val hourlyChimeEnabled = hasChecked("hourlybeep_range") || hasChecked("hourlybeep2") || hasChecked("hourlybeep")
             val hourlyToneRangeEnabled = hasChecked("tonerangeen")
-            val toneStartStr = extractRegex("id=['\"]tonestarthr['\"][^>]*value=['\"]([0-9:]+)['\"]", "07:00")
-            val toneEndStr = extractRegex("id=['\"]toneendhr['\"][^>]*value=['\"]([0-9:]+)['\"]", "22:00")
+            val toneStartStr = extractRegex(TONE_START_REGEX, "07:00")
+            val toneEndStr = extractRegex(TONE_END_REGEX, "22:00")
             val toneStartHour = toneStartStr.split(":").getOrNull(0)?.toIntOrNull() ?: 7
             val toneEndHour = toneEndStr.split(":").getOrNull(0)?.toIntOrNull() ?: 22
             val enableEngDate = hasChecked("showEnglishDate")
             val enableBanDate = hasChecked("showBanglaDate")
 
-            val hourlyChimeMode = extractRegex("value=['\"]([0-3])['\"][^>]*name=['\"]hmode['\"][^>]*checked|name=['\"]hmode['\"][^>]*value=['\"]([0-3])['\"][^>]*checked", "0").toIntOrNull() ?: 0
+            val hourlyChimeMode = extractRegex(HMODE_REGEX, "0").toIntOrNull() ?: 0
 
             // 5. Brightness & LDR Telemetry
             val autoLdr = hasChecked("autoldr")
-            val ldrRaw = extractRegex("Live LDR Raw:\\s*<strong>([0-9]+)</strong>", "450").toIntOrNull() ?: 450
-            val appliedBrightness = extractRegex("Applied Brightness:\\s*<strong>([0-9]+)</strong>", "128").toIntOrNull()
-                ?: extractRegex("id=['\"]bright['\"][^>]*value=['\"]([0-9]+)['\"]", "128").toIntOrNull() ?: 128
+            val ldrRaw = extractRegex(LDR_RAW_REGEX, "450").toIntOrNull() ?: 450
+            val appliedBrightness = extractRegex(APPLIED_BRIGHT_REGEX1, "").toIntOrNull()
+                ?: extractRegex(APPLIED_BRIGHT_REGEX2, "128").toIntOrNull() ?: 128
 
             // 6. Color Mode & Playlist
-            val colorMode = extractRegex("<select[^>]*id=['\"]colormode['\"][^>]*>.*?<option value=['\"]([0-4])['\"]\\s*selected", "0").toIntOrNull() ?: 0
-            val playlistOn = extractRegex("id=['\"]plstatus['\"][^>]*class=['\"]status-([a-zA-Z]+)['\"]", "off").equals("on", ignoreCase = true)
+            val colorMode = extractRegex(COLOR_MODE_REGEX, "0").toIntOrNull() ?: 0
+            val playlistOn = extractRegex(PLAYLIST_STATUS_REGEX, "off").equals("on", ignoreCase = true)
 
             // 7. Network Status
-            val wifiSsid = extractRegex("Connected:\\s*<strong>(.*?)</strong>", extractRegex("id=['\"]wifissid['\"][^>]*value=['\"](.*?)['\"]", ""))
-            val ipAddress = extractRegex("IP:\\s*([0-9.]+)", host)
+            val wifiSsid = extractRegex(WIFI_SSID_CONNECTED_REGEX, extractRegex(WIFI_SSID_INPUT_REGEX, ""))
+            val ipAddress = extractRegex(IP_REGEX, host)
             val isApMode = html.contains("SoftAP", ignoreCase = true) || host.contains("192.168.4.1")
             val isWifiConn = isApMode || (wifiSsid.isNotBlank() && !html.contains("Wi-Fi disconnected", ignoreCase = true))
 
@@ -398,17 +407,17 @@ open class Esp32Api {
             val is12Hour = hasChecked("fmt12")
 
             // 9. Dual Alarms
-            val a0Time = extractRegex("id=['\"]alarm0['\"][^>]*value=['\"]([0-9:]+)['\"]", "06:30").split(":")
+            val a0Time = extractRegex(ALARM0_TIME_REGEX, "06:30").split(":")
             val a0H = a0Time.getOrNull(0)?.toIntOrNull() ?: 6
             val a0M = a0Time.getOrNull(1)?.toIntOrNull() ?: 30
             val a0En = hasChecked("en0")
-            val a0Track = extractRegex("id=['\"]al0['\"][^>]*value=['\"]([0-9]+)['\"]", "1").toIntOrNull() ?: 1
+            val a0Track = extractRegex(ALARM0_TRACK_REGEX, "1").toIntOrNull() ?: 1
 
-            val a1Time = extractRegex("id=['\"]alarm1['\"][^>]*value=['\"]([0-9:]+)['\"]", "18:30").split(":")
+            val a1Time = extractRegex(ALARM1_TIME_REGEX, "18:30").split(":")
             val a1H = a1Time.getOrNull(0)?.toIntOrNull() ?: 18
             val a1M = a1Time.getOrNull(1)?.toIntOrNull() ?: 30
             val a1En = hasChecked("en1")
-            val a1Track = extractRegex("id=['\"]al1['\"][^>]*value=['\"]([0-9]+)['\"]", "2").toIntOrNull() ?: 2
+            val a1Track = extractRegex(ALARM1_TRACK_REGEX, "2").toIntOrNull() ?: 2
 
             val alarms = listOf(
                 ClockAlarmStatus(hour = a0H, minute = a0M, enabled = a0En, track = a0Track),
@@ -416,8 +425,8 @@ open class Esp32Api {
             )
 
             // 10. Azan Tracks
-            val azanTracks = (0..4).map { i ->
-                extractRegex("id=['\"]az$i['\"][^>]*value=['\"]([0-9]+)['\"]", "${i + 1}").toIntOrNull() ?: (i + 1)
+            val azanTracks = AZAN_TRACK_REGEXES.mapIndexed { i, regex ->
+                extractRegex(regex, "${i + 1}").toIntOrNull() ?: (i + 1)
             }
 
             ClockDashboardData(
